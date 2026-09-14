@@ -54,9 +54,21 @@
         }
       };
 
-      request.onsuccess = function () { resolve(request.result); };
+      request.onsuccess = function () {
+        var db = request.result;
+
+        /* If a newer version of the till opens somewhere else, step aside
+           rather than blocking it. Without this, a forgotten Safari tab can
+           stop the app updating and the reason is invisible. */
+        db.onversionchange = function () {
+          db.close();
+          opening = null;
+        };
+
+        resolve(db);
+      };
       request.onerror = function () { reject(request.error); };
-      request.onblocked = function () { reject(new Error('Another copy of the till is open')); };
+      request.onblocked = function () { reject(new Error('Close the till everywhere else, then try again')); };
     });
 
     return opening;
@@ -160,13 +172,21 @@
     });
   }
 
+  /* Empties every table. Deliberately does NOT delete the database itself:
+     a browser refuses to delete a database that is still open anywhere,
+     including in another tab, and then nothing happens and no error is
+     reported. Emptying the tables always works. */
   function wipe() {
-    opening = null;
-    return new Promise(function (resolve, reject) {
-      var request = indexedDB.deleteDatabase(DB_NAME);
-      request.onsuccess = function () { resolve(true); };
-      request.onerror = function () { reject(request.error); };
-      request.onblocked = function () { resolve(true); };
+    var names = ['products', 'batches', 'sales', 'saleLines'];
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(names, 'readwrite');
+        names.forEach(function (name) { t.objectStore(name).clear(); });
+        t.oncomplete = function () { resolve(true); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('Clearing was cancelled')); };
+      });
     });
   }
 
