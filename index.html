@@ -4,62 +4,221 @@
 <meta charset="utf-8">
 <title>Baby shop till</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F5C4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Till">
-<meta name="theme-color" content="#0E5C4A">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon-180.png">
-<link rel="stylesheet" href="./styles.css">
+<style>
+  :root {
+    --bg: #F2F4F1;
+    --card: #FFFFFF;
+    --ink: #16261F;
+    --muted: #5A6A62;
+    --line: #DDE3DE;
+    --brand: #1F5C4A;
+    --good: #2E7D63;
+    --warn: #8A6100;
+    --bad: #9B2C1F;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-rounded, -apple-system, "SF Pro Rounded", "Helvetica Neue", sans-serif;
+    font-size: 18px;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    padding:
+      calc(env(safe-area-inset-top) + 28px)
+      calc(env(safe-area-inset-right) + 20px)
+      calc(env(safe-area-inset-bottom) + 40px)
+      calc(env(safe-area-inset-left) + 20px);
+  }
+  main { max-width: 32rem; margin: 0 auto; }
+
+  .shopname {
+    font-size: 15px;
+    color: var(--brand);
+    letter-spacing: 0.01em;
+    margin: 0 0 20px;
+  }
+
+  .verdict {
+    font-size: 30px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .verdict[data-state="good"] { color: var(--good); }
+  .verdict[data-state="warn"] { color: var(--warn); }
+  .verdict[data-state="bad"]  { color: var(--bad); }
+
+  .verdict-note {
+    margin: 0 0 28px;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .checks {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .check {
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    padding: 16px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .check:first-child { border-top: 0; }
+  .check .label { flex: 1; }
+  .check .label b { display: block; font-weight: 600; }
+  .check .label span { display: block; font-size: 15px; color: var(--muted); }
+  .check .value { font-weight: 700; white-space: nowrap; }
+  .check[data-state="good"] .value { color: var(--good); }
+  .check[data-state="warn"] .value { color: var(--warn); }
+  .check[data-state="bad"]  .value { color: var(--bad); }
+
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: var(--brand);
+    border: 0;
+    border-radius: 12px;
+    padding: 15px 22px;
+    margin-top: 22px;
+    min-height: 52px;
+    width: 100%;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:active { background: #17473A; }
+  button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  footer {
+    margin-top: 26px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+</style>
 </head>
 <body>
 <main>
-  <header>
-    <h1>Baby shop till</h1>
-    <p class="sub">Foundation build. Nothing sells yet — this screen only proves the app is installed correctly.</p>
-  </header>
+  <p class="shopname">Baby shop till</p>
 
-  <section class="checks" aria-label="Installation checks">
-    <div class="check" id="check-home">
-      <span class="dot" aria-hidden="true"></span>
-      <div>
-        <h2>Opened from Home Screen</h2>
-        <p class="state">Checking…</p>
+  <h1 class="verdict" id="verdict">Checking…</h1>
+  <p class="verdict-note" id="verdict-note">One moment.</p>
+
+  <section class="checks" id="checks">
+    <div class="check" id="row-net">
+      <div class="label">
+        <b>Internet</b>
+        <span id="net-note">&nbsp;</span>
       </div>
+      <div class="value" id="net-value">–</div>
     </div>
 
-    <div class="check" id="check-copy">
-      <span class="dot" aria-hidden="true"></span>
-      <div>
-        <h2>Offline copy saved</h2>
-        <p class="state">Checking…</p>
+    <div class="check" id="row-home">
+      <div class="label">
+        <b>Opened from Home Screen</b>
+        <span id="home-note">&nbsp;</span>
       </div>
+      <div class="value" id="home-value">–</div>
     </div>
 
-    <div class="check" id="check-net">
-      <span class="dot" aria-hidden="true"></span>
-      <div>
-        <h2>Internet</h2>
-        <p class="state">Checking…</p>
+    <div class="check" id="row-cache">
+      <div class="label">
+        <b>Offline copy on this iPad</b>
+        <span id="cache-note">&nbsp;</span>
       </div>
+      <div class="value" id="cache-value">–</div>
     </div>
   </section>
 
-  <section class="test">
-    <h2>The test</h2>
-    <ol>
-      <li>Turn on airplane mode.</li>
-      <li>Close this app completely.</li>
-      <li>Open it again from the Home Screen icon.</li>
-    </ol>
-    <p>The first two checks must stay green. The third will turn grey, and that is correct.</p>
-  </section>
+  <button id="recheck">Check again</button>
 
-  <footer>
-    <p>Version <span id="version">1</span></p>
-  </footer>
+  <footer>Foundation build 1 · no products, no sales yet</footer>
 </main>
-<script src="./app.js"></script>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+
+  function setRow(row, state, value, note) {
+    $('row-' + row).setAttribute('data-state', state);
+    $(row + '-value').textContent = value;
+    $(row + '-note').innerHTML = note || '&nbsp;';
+  }
+
+  function isHomeScreen() {
+    var standalone = window.navigator.standalone === true;
+    var css = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    return standalone || css;
+  }
+
+  function hasOfflineCopy() {
+    return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  }
+
+  function run() {
+    var online = navigator.onLine;
+    var home = isHomeScreen();
+    var cached = hasOfflineCopy();
+
+    setRow('net', online ? 'good' : 'warn',
+      online ? 'On' : 'Off',
+      online ? 'Fine either way.' : 'Fine — the till does not need it.');
+
+    setRow('home', home ? 'good' : 'warn',
+      home ? 'Yes' : 'No',
+      home ? '' : 'You are in Safari. Add to Home Screen, then open the icon.');
+
+    setRow('cache', cached ? 'good' : 'warn',
+      cached ? 'Saved' : 'Not yet',
+      cached ? '' : 'Stay online a moment, then tap Check again.');
+
+    if (home && cached) {
+      $('verdict').setAttribute('data-state', 'good');
+      $('verdict').textContent = 'Working offline';
+      $('verdict-note').textContent = 'Turn on Airplane Mode, close this, and open it again. It should still open.';
+    } else if (cached && !home) {
+      $('verdict').setAttribute('data-state', 'warn');
+      $('verdict').textContent = 'Almost there';
+      $('verdict-note').textContent = 'The iPad has its own copy. Now add it to the Home Screen and open it from there.';
+    } else {
+      $('verdict').setAttribute('data-state', 'warn');
+      $('verdict').textContent = 'Setting up';
+      $('verdict-note').textContent = 'Keep the internet on for a few seconds while the iPad saves its copy.';
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(function () { return navigator.serviceWorker.ready; })
+      .then(function () { setTimeout(run, 400); })
+      .catch(function () {
+        $('verdict').setAttribute('data-state', 'bad');
+        $('verdict').textContent = 'Cannot save an offline copy';
+        $('verdict-note').textContent = 'This usually means the address is not https. Check the GitHub Pages link.';
+      });
+    navigator.serviceWorker.addEventListener('controllerchange', run);
+  } else {
+    $('verdict').setAttribute('data-state', 'bad');
+    $('verdict').textContent = 'This iPad cannot run the till';
+    $('verdict-note').textContent = 'Update iPadOS, or open the link in Safari rather than another browser.';
+  }
+
+  window.addEventListener('online', run);
+  window.addEventListener('offline', run);
+  $('recheck').addEventListener('click', run);
+  run();
+</script>
 </body>
 </html>

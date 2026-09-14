@@ -1,0 +1,111 @@
+STEP 1 — GET THE BLANK TILL ONTO THE iPAD
+
+You have 5 files. They all go in the same place, together, and none of
+them get renamed:
+
+    index.html
+    service-worker.js
+    manifest.webmanifest
+    icon-180.png
+    icon-512.png
+
+(This instructions file does NOT get uploaded. It is just for you.)
+
+There is no till yet — no products, no selling. This step only proves
+the iPad can open the app with the internet off. If that works, the
+rest is safe to build. If it doesn't, better to know now.
+
+
+PART A — PUT THE FILES ONLINE
+You only do this part once, and you need internet for it.
+Do it on a computer if you have one. An iPad works too, just fiddlier.
+
+1. Go to github.com and make a free account.
+
+2. Top right, click the + sign, then "New repository".
+
+3. Repository name: type   till
+   Leave it set to Public.
+   Tick "Add a README file".
+   Click "Create repository".
+
+4. On the page that appears, click "Add file", then "Upload files".
+
+5. Drag all 5 files into the box. Wait until all 5 are listed.
+
+6. Scroll down, click the green "Commit changes" button.
+
+7. Click "Settings" (top of the page), then "Pages" (left side list).
+
+8. Under "Branch", change "None" to "main". Leave the folder as "/ (root)".
+   Click "Save".
+
+9. Wait about two minutes, then refresh that page. A web address will
+   appear at the top, looking like:
+
+       https://YOURNAME.github.io/till/
+
+   That address is your till. Write it down.
+
+
+PART B — PUT IT ON THE iPAD
+Internet still on for this part.
+
+10. On the iPad, open Safari. Not Chrome — this only works in Safari.
+
+11. Type in that address from step 9.
+
+12. The page should load and say "Setting up" or "Almost there".
+    Wait ten seconds, then tap "Check again".
+    "Offline copy on this iPad" should now say "Saved".
+
+13. Tap the Share button (the square with an arrow pointing up, at the
+    top of Safari).
+
+14. Scroll down the list and tap "Add to Home Screen", then "Add".
+
+15. Close Safari completely.
+
+
+PART C — THE ACTUAL TEST
+This is the bit that matters.
+
+16. Tap the new bottle icon on the Home Screen.
+    It should open full screen, with no Safari address bar at the top.
+    It should say "Working offline" in green.
+
+17. Now turn on Airplane Mode (swipe down from the top right corner of
+    the iPad, tap the aeroplane).
+
+18. Close the app properly: swipe up from the bottom of the screen and
+    hold, then flick the app card upwards.
+
+19. Tap the bottle icon again.
+
+It should open normally, with Internet showing "Off" and the heading
+still green.
+
+That is the whole test. Turn Airplane Mode back off afterwards.
+
+
+IF SOMETHING GOES WRONG
+
+Tell me exactly what the screen says, word for word, and which step
+number you were on. Don't describe it in your own words — the exact
+text is what tells me what happened.
+
+Common ones:
+
+  "Cannot save an offline copy"
+      The address isn't https, or GitHub Pages isn't finished setting
+      up yet. Wait five minutes and try again.
+
+  Opened from Home Screen says "No"
+      You opened it in Safari instead of tapping the Home Screen icon.
+
+  Safari says the page cannot be found
+      GitHub Pages may still be building. Wait, then try again. Check
+      the address has /till/ on the end, with the last slash.
+
+  It opened but looks plain and unfinished
+      That is correct. It is meant to be empty.

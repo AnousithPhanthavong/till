@@ -1,16 +1,13 @@
-// Keeps a copy of the app on the device so it opens with no internet.
-// When any file changes, raise the number in CACHE so the iPad picks it up.
+/* Keeps a copy of the till on the iPad so it opens with no internet.
+   Change CACHE when you send a new version of the files. */
 
-var CACHE = 'till-shell-v1';
+var CACHE = 'till-1';
 
 var FILES = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
   './manifest.webmanifest',
   './icon-180.png',
-  './icon-192.png',
   './icon-512.png'
 ];
 
@@ -28,7 +25,7 @@ self.addEventListener('activate', function (event) {
   event.waitUntil(
     caches.keys().then(function (names) {
       return Promise.all(names.map(function (name) {
-        if (name !== CACHE) return caches.delete(name);
+        if (name !== CACHE) { return caches.delete(name); }
       }));
     }).then(function () {
       return self.clients.claim();
@@ -37,15 +34,29 @@ self.addEventListener('activate', function (event) {
 });
 
 self.addEventListener('fetch', function (event) {
-  if (event.request.method !== 'GET') return;
+  var request = event.request;
+
+  if (request.method !== 'GET') { return; }
+
+  // Opening the app: always fall back to the saved page.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(function () {
+        return caches.match('./index.html');
+      })
+    );
+    return;
+  }
 
   event.respondWith(
-    caches.match(event.request).then(function (hit) {
-      if (hit) return hit;
-      return fetch(event.request).catch(function () {
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
+    caches.match(request).then(function (hit) {
+      if (hit) { return hit; }
+      return fetch(request).then(function (response) {
+        if (response && response.status === 200 && response.type === 'basic') {
+          var copy = response.clone();
+          caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
         }
+        return response;
       });
     })
   );
