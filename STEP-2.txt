@@ -1,0 +1,100 @@
+STEP 2 — THE DATA TABLES
+
+Three files to upload this time:
+
+    index.html          (replaces the one already there)
+    db.js               (new)
+    service-worker.js   (replaces the one already there)
+
+The two icon files and the manifest stay as they are. Don't touch them.
+
+
+PART A — UPLOAD
+
+1. On github.com, open your "till" repository.
+
+2. Click "Add file", then "Upload files".
+
+3. Drag in all three files. GitHub will replace the two that already
+   exist and add db.js. That is what you want.
+
+4. Scroll down, click "Commit changes".
+
+5. Wait two minutes for GitHub to publish.
+
+
+PART B — UPDATE THE iPAD
+
+The iPad is holding its own offline copy, so it needs internet once to
+pick up the new version.
+
+6. Make sure Airplane Mode is OFF and the iPad has internet.
+
+7. Open the till from the Home Screen icon.
+
+8. Close it completely (swipe up from the bottom and hold, flick the
+   card away), then open it again.
+
+You should now see a list headed "Saved on this iPad" with four lines:
+Products, Batches of stock, Sales, Items sold. All showing 0.
+
+If you still see the old screen with "Working offline", close and
+reopen once more. It sometimes takes two opens.
+
+
+PART C — THE TEST
+
+9. Tap "Save a test sale".
+
+The numbers should change to: 1 product, 2 batches, 1 sale, 2 items
+sold. Underneath, a panel appears showing what was sold.
+
+Read that panel. It should say:
+
+    2 × Test formula 800g at 185,000 ₭ = 370,000 ₭
+    from batch LOT-A, expires 2026-12-31
+    1 × Test formula 800g at 185,000 ₭ = 185,000 ₭
+    from batch LOT-B, expires 2027-06-30
+    Total 555,000 ₭
+    Cash 600,000 ₭, change 45,000 ₭
+
+That is the important bit. Three units were sold, and the till took two
+from LOT-A before touching LOT-B — because LOT-A expires first. That is
+first-expired-first-out working. It is the thing this whole batch system
+exists for.
+
+10. Now close the app completely and open it again.
+
+The numbers must still be there. If they are, the till can remember
+sales, and the foundation is finished.
+
+11. Optional but worth doing: turn on Airplane Mode and tap "Save a test
+    sale" again. It should save exactly the same way with no internet.
+    The sales count goes to 2.
+
+12. When you're happy, tap "Delete all test data" to clear the fake
+    numbers out. Say yes to the warning.
+
+
+WHAT THE TEST DATA IS
+
+It is fake. One made-up product called "Test formula 800g" with a
+made-up barcode and made-up prices. It exists only to prove the tables
+work. The button that creates it gets removed when the real selling
+screen is built.
+
+
+IF SOMETHING GOES WRONG
+
+Tell me the exact words on the screen and the step number. In
+particular:
+
+  "The till cannot save data"
+      followed by a message — send me that message word for word.
+
+  Numbers go back to 0 after closing the app
+      That is a real problem and I need to know immediately.
+
+  Still seeing the old "Working offline" screen after several opens
+      The upload may not have published. Check on github.com that
+      db.js is listed in the repository.

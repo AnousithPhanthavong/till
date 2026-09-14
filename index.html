@@ -40,51 +40,49 @@
   }
   main { max-width: 32rem; margin: 0 auto; }
 
-  .shopname {
-    font-size: 15px;
-    color: var(--brand);
-    letter-spacing: 0.01em;
-    margin: 0 0 20px;
-  }
+  .shopname { font-size: 15px; color: var(--brand); margin: 0 0 20px; }
 
-  .verdict {
+  h1 {
     font-size: 30px;
     line-height: 1.2;
     font-weight: 700;
     letter-spacing: -0.02em;
     margin: 0 0 6px;
   }
-  .verdict[data-state="good"] { color: var(--good); }
-  .verdict[data-state="warn"] { color: var(--warn); }
-  .verdict[data-state="bad"]  { color: var(--bad); }
+  h1[data-state="good"] { color: var(--good); }
+  h1[data-state="bad"] { color: var(--bad); }
 
-  .verdict-note {
-    margin: 0 0 28px;
-    color: var(--muted);
-    font-size: 16px;
-  }
+  .lede { margin: 0 0 26px; color: var(--muted); font-size: 16px; }
 
-  .checks {
+  .panel {
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 14px;
     overflow: hidden;
+    margin-bottom: 22px;
   }
-  .check {
+  .panel h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0;
+    padding: 14px 18px 0;
+  }
+  .row {
     display: flex;
+    justify-content: space-between;
     gap: 14px;
-    align-items: baseline;
-    padding: 16px 18px;
+    padding: 13px 18px;
     border-top: 1px solid var(--line);
   }
-  .check:first-child { border-top: 0; }
-  .check .label { flex: 1; }
-  .check .label b { display: block; font-weight: 600; }
-  .check .label span { display: block; font-size: 15px; color: var(--muted); }
-  .check .value { font-weight: 700; white-space: nowrap; }
-  .check[data-state="good"] .value { color: var(--good); }
-  .check[data-state="warn"] .value { color: var(--warn); }
-  .check[data-state="bad"]  .value { color: var(--bad); }
+  .panel h2 + .row { border-top: 0; }
+  .row .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row .n[data-zero="yes"] { color: var(--muted); font-weight: 400; }
+
+  .sale { padding: 4px 18px 18px; }
+  .sale p { margin: 10px 0 0; }
+  .sale .total { font-weight: 700; font-size: 21px; }
+  .sale .fefo { color: var(--muted); font-size: 15px; }
 
   button {
     font: inherit;
@@ -94,131 +92,155 @@
     border: 0;
     border-radius: 12px;
     padding: 15px 22px;
-    margin-top: 22px;
     min-height: 52px;
     width: 100%;
+    margin-bottom: 12px;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   button:active { background: #17473A; }
   button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  button.quiet {
+    background: transparent;
+    color: var(--bad);
+    border: 1px solid var(--line);
+  }
+  button.quiet:active { background: #F6EAE8; }
+  button[disabled] { opacity: 0.5; }
 
   footer {
-    margin-top: 26px;
+    margin-top: 24px;
     font-size: 14px;
     color: var(--muted);
   }
+  footer b { font-weight: 600; color: var(--ink); }
 </style>
 </head>
 <body>
 <main>
   <p class="shopname">Baby shop till</p>
 
-  <h1 class="verdict" id="verdict">Checking…</h1>
-  <p class="verdict-note" id="verdict-note">One moment.</p>
+  <h1 id="verdict">Checking…</h1>
+  <p class="lede" id="lede">Reading what is saved on this iPad.</p>
 
-  <section class="checks" id="checks">
-    <div class="check" id="row-net">
-      <div class="label">
-        <b>Internet</b>
-        <span id="net-note">&nbsp;</span>
-      </div>
-      <div class="value" id="net-value">–</div>
-    </div>
-
-    <div class="check" id="row-home">
-      <div class="label">
-        <b>Opened from Home Screen</b>
-        <span id="home-note">&nbsp;</span>
-      </div>
-      <div class="value" id="home-value">–</div>
-    </div>
-
-    <div class="check" id="row-cache">
-      <div class="label">
-        <b>Offline copy on this iPad</b>
-        <span id="cache-note">&nbsp;</span>
-      </div>
-      <div class="value" id="cache-value">–</div>
-    </div>
+  <section class="panel">
+    <h2>Saved on this iPad</h2>
+    <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
+    <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
+    <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
+    <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
   </section>
 
-  <button id="recheck">Check again</button>
+  <section class="panel" id="last-panel" hidden>
+    <h2>Most recent sale</h2>
+    <div class="sale" id="last-sale"></div>
+  </section>
 
-  <footer>Foundation build 1 · no products, no sales yet</footer>
+  <button id="add">Save a test sale</button>
+  <button id="clear" class="quiet">Delete all test data</button>
+
+  <footer id="status">Checking the app…</footer>
 </main>
 
+<script src="./db.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
 
-  function setRow(row, state, value, note) {
-    $('row-' + row).setAttribute('data-state', state);
-    $(row + '-value').textContent = value;
-    $(row + '-note').innerHTML = note || '&nbsp;';
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function showStatus() {
+    var home = window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    var offlineCopy = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+
+    $('status').innerHTML =
+      'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
+      'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
+      'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
+      'Foundation build 2';
   }
 
-  function isHomeScreen() {
-    var standalone = window.navigator.standalone === true;
-    var css = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-    return standalone || css;
-  }
-
-  function hasOfflineCopy() {
-    return !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-  }
-
-  function run() {
-    var online = navigator.onLine;
-    var home = isHomeScreen();
-    var cached = hasOfflineCopy();
-
-    setRow('net', online ? 'good' : 'warn',
-      online ? 'On' : 'Off',
-      online ? 'Fine either way.' : 'Fine — the till does not need it.');
-
-    setRow('home', home ? 'good' : 'warn',
-      home ? 'Yes' : 'No',
-      home ? '' : 'You are in Safari. Add to Home Screen, then open the icon.');
-
-    setRow('cache', cached ? 'good' : 'warn',
-      cached ? 'Saved' : 'Not yet',
-      cached ? '' : 'Stay online a moment, then tap Check again.');
-
-    if (home && cached) {
-      $('verdict').setAttribute('data-state', 'good');
-      $('verdict').textContent = 'Working offline';
-      $('verdict-note').textContent = 'Turn on Airplane Mode, close this, and open it again. It should still open.';
-    } else if (cached && !home) {
-      $('verdict').setAttribute('data-state', 'warn');
-      $('verdict').textContent = 'Almost there';
-      $('verdict-note').textContent = 'The iPad has its own copy. Now add it to the Home Screen and open it from there.';
-    } else {
-      $('verdict').setAttribute('data-state', 'warn');
-      $('verdict').textContent = 'Setting up';
-      $('verdict-note').textContent = 'Keep the internet on for a few seconds while the iPad saves its copy.';
+  function showLastSale(data) {
+    if (!data) {
+      $('last-panel').hidden = true;
+      return;
     }
+    $('last-panel').hidden = false;
+
+    var sale = data.sale;
+    var html = '';
+
+    data.lines.forEach(function (line) {
+      html += '<p>' + line.qty + ' \u00D7 ' + line.name +
+        ' at ' + Till.formatKip(line.unitPriceKip) +
+        ' = ' + Till.formatKip(line.lineTotalKip) + '</p>' +
+        '<p class="fefo">from batch ' + line.batchCode +
+        ', expires ' + (line.expiry || 'no expiry') + '</p>';
+    });
+
+    html += '<p class="total">Total ' + Till.formatKip(sale.totalKip) + '</p>';
+    html += '<p class="fefo">Cash ' + Till.formatKip(sale.cashGivenKip) +
+      ', change ' + Till.formatKip(sale.changeKip) + '</p>';
+
+    $('last-sale').innerHTML = html;
   }
+
+  function refresh() {
+    return Till.counts().then(function (c) {
+      ['products', 'batches', 'sales', 'saleLines'].forEach(function (key) {
+        var el = $('n-' + key);
+        el.textContent = c[key];
+        el.setAttribute('data-zero', c[key] === 0 ? 'yes' : 'no');
+      });
+
+      if (c.sales > 0) {
+        $('verdict').setAttribute('data-state', 'good');
+        $('verdict').textContent = plural(c.sales, 'sale saved', 'sales saved');
+        $('lede').textContent = 'Close the app completely and open it again. These numbers should not change.';
+      } else {
+        $('verdict').removeAttribute('data-state');
+        $('verdict').textContent = 'Nothing saved yet';
+        $('lede').textContent = 'Tap the button below to write one test sale into the till.';
+      }
+
+      return Till.lastSaleSummary();
+    }).then(showLastSale)
+      .catch(function (err) {
+        $('verdict').setAttribute('data-state', 'bad');
+        $('verdict').textContent = 'The till cannot save data';
+        $('lede').textContent = String(err && err.message ? err.message : err);
+      });
+  }
+
+  $('add').addEventListener('click', function () {
+    $('add').disabled = true;
+    Till.selfTest()
+      .then(refresh)
+      .catch(function (err) {
+        $('verdict').setAttribute('data-state', 'bad');
+        $('verdict').textContent = 'That sale did not save';
+        $('lede').textContent = String(err && err.message ? err.message : err);
+      })
+      .then(function () { $('add').disabled = false; });
+  });
+
+  $('clear').addEventListener('click', function () {
+    if (!window.confirm('Delete every product, batch and sale saved on this iPad?')) { return; }
+    $('clear').disabled = true;
+    Till.wipe()
+      .then(refresh)
+      .then(function () { $('clear').disabled = false; });
+  });
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./service-worker.js')
-      .then(function () { return navigator.serviceWorker.ready; })
-      .then(function () { setTimeout(run, 400); })
-      .catch(function () {
-        $('verdict').setAttribute('data-state', 'bad');
-        $('verdict').textContent = 'Cannot save an offline copy';
-        $('verdict-note').textContent = 'This usually means the address is not https. Check the GitHub Pages link.';
-      });
-    navigator.serviceWorker.addEventListener('controllerchange', run);
-  } else {
-    $('verdict').setAttribute('data-state', 'bad');
-    $('verdict').textContent = 'This iPad cannot run the till';
-    $('verdict-note').textContent = 'Update iPadOS, or open the link in Safari rather than another browser.';
+    navigator.serviceWorker.register('./service-worker.js');
   }
 
-  window.addEventListener('online', run);
-  window.addEventListener('offline', run);
-  $('recheck').addEventListener('click', run);
-  run();
+  window.addEventListener('online', showStatus);
+  window.addEventListener('offline', showStatus);
+
+  showStatus();
+  refresh();
 </script>
 </body>
 </html>
