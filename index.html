@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Baby shop till</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Till">
+<meta name="theme-color" content="#0E5C4A">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>Baby shop till</h1>
+    <p class="sub">Foundation build. Nothing sells yet — this screen only proves the app is installed correctly.</p>
+  </header>
+
+  <section class="checks" aria-label="Installation checks">
+    <div class="check" id="check-home">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <h2>Opened from Home Screen</h2>
+        <p class="state">Checking…</p>
+      </div>
+    </div>
+
+    <div class="check" id="check-copy">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <h2>Offline copy saved</h2>
+        <p class="state">Checking…</p>
+      </div>
+    </div>
+
+    <div class="check" id="check-net">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <h2>Internet</h2>
+        <p class="state">Checking…</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="test">
+    <h2>The test</h2>
+    <ol>
+      <li>Turn on airplane mode.</li>
+      <li>Close this app completely.</li>
+      <li>Open it again from the Home Screen icon.</li>
+    </ol>
+    <p>The first two checks must stay green. The third will turn grey, and that is correct.</p>
+  </section>
+
+  <footer>
+    <p>Version <span id="version">1</span></p>
+  </footer>
+</main>
+<script src="./app.js"></script>
+</body>
+</html>

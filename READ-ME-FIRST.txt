@@ -1,0 +1,62 @@
+BABY SHOP TILL — STEP 1: GET THE BLANK APP ONTO THE iPAD
+
+You have 8 files. All of them go in the same place, together.
+Do not rename any of them.
+
+  index.html
+  styles.css
+  app.js
+  service-worker.js
+  manifest.webmanifest
+  icon-180.png
+  icon-192.png
+  icon-512.png
+
+
+PART A — PUT THE FILES ONLINE (once, needs internet)
+
+1. Go to github.com and create a free account if you don't have one.
+
+2. Click the + in the top right, then "New repository".
+   Name it:  till
+   Choose Public. Leave every other box alone. Click "Create repository".
+
+3. On the next page click "uploading an existing file".
+   Select all 8 files and upload them. Click "Commit changes".
+
+4. Click "Settings" at the top, then "Pages" in the left list.
+   Under "Branch" choose "main", leave the folder as "/ (root)", click Save.
+
+5. Wait about two minutes, then refresh that page. It will show an address like:
+   https://yourname.github.io/till/
+   Write it down. That address is the app.
+
+
+PART B — INSTALL IT ON THE iPAD (once, needs internet)
+
+6. On the iPad, open Safari and go to that address.
+   You should see "Baby shop till" and three checks.
+
+7. Tap the Share button (the square with an arrow pointing up).
+   Scroll down, tap "Add to Home Screen", tap "Add".
+
+8. Close Safari. Open the new icon on the Home Screen.
+
+9. Close the app and open it again from the icon. This second open is what
+   saves the offline copy.
+
+
+PART C — THE TEST (this is the part that matters)
+
+10. Turn on airplane mode.
+11. Close the app completely: swipe up from the bottom and flick it away.
+12. Open it again from the Home Screen icon.
+
+It should open normally, and show:
+
+   Opened from Home Screen ....... green
+   Offline copy saved ............ green
+   Internet ...................... grey, saying the app has no internet
+
+If all three say that, step 1 is done. Tell me and we move to step 2.
+If anything is different, tell me exactly what the screen says.
