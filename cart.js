@@ -3,12 +3,18 @@
    which is what lets it be checked automatically.
 
    Step 1: finding products from what is typed.
-   Step 2 will add the cart and the total. */
+   Step 2: the cart and its total.
+
+   A cart is { lines: [...] }. Each line is
+   { productId, name, barcode, unitPriceKip, qty }.
+   Functions here never change the cart they are given. They return a new
+   one, so a failed step can never leave a cart half changed. */
 
 (function (global) {
   'use strict';
 
   var MAX_RESULTS = 30;
+  var MAX_QTY = 999;
 
   /* Makes text comparable: same Unicode form, lower case, single spaces.
      The Unicode step matters for Lao, where the same word can be stored
@@ -62,8 +68,93 @@
     return scored.slice(0, MAX_RESULTS).map(function (s) { return s.product; });
   }
 
+  /* ---------- the cart ---------- */
+
+  function emptyCart() {
+    return { lines: [] };
+  }
+
+  function isWholeKip(n) {
+    return typeof n === 'number' && Number.isSafeInteger(n) && n > 0;
+  }
+
+  function copyLines(cart) {
+    return ((cart && cart.lines) || []).map(function (l) {
+      return {
+        productId: l.productId,
+        name: l.name,
+        barcode: l.barcode,
+        unitPriceKip: l.unitPriceKip,
+        qty: l.qty
+      };
+    });
+  }
+
+  /* Adds one of a product. If it is already in the cart, that line goes up
+     by one and keeps the price it was added at. A new product goes to the
+     top of the cart, so the latest item is always the one you see first. */
+  function addToCart(cart, product) {
+    if (!product || !product.id) {
+      throw new Error('That product could not be added.');
+    }
+    if (!isWholeKip(product.priceKip)) {
+      throw new Error('"' + (product.name || 'This product') +
+        '" has no proper selling price. Fix it on the Products screen.');
+    }
+
+    var lines = copyLines(cart);
+    var found = null;
+    lines.forEach(function (l) { if (l.productId === product.id) { found = l; } });
+
+    if (found) {
+      if (found.qty >= MAX_QTY) {
+        throw new Error('Cannot sell more than ' + MAX_QTY + ' of one product in a sale.');
+      }
+      found.qty += 1;
+      /* Move it to the top so the change is visible. */
+      lines = [found].concat(lines.filter(function (l) { return l !== found; }));
+    } else {
+      lines.unshift({
+        productId: product.id,
+        name: String(product.name || ''),
+        barcode: String(product.barcode || ''),
+        unitPriceKip: product.priceKip,
+        qty: 1
+      });
+    }
+
+    return { lines: lines };
+  }
+
+  function lineTotal(line) {
+    return line.unitPriceKip * line.qty;
+  }
+
+  /* The total of the whole cart, in whole kip. */
+  function cartTotal(cart) {
+    var total = 0;
+    ((cart && cart.lines) || []).forEach(function (l) { total += lineTotal(l); });
+    if (!Number.isSafeInteger(total)) {
+      throw new Error('The total is too large to be right.');
+    }
+    return total;
+  }
+
+  /* How many items, counting quantities: 2 tins + 1 pack = 3. */
+  function cartCount(cart) {
+    var n = 0;
+    ((cart && cart.lines) || []).forEach(function (l) { n += l.qty; });
+    return n;
+  }
+
   global.Sell = {
     MAX_RESULTS: MAX_RESULTS,
+    MAX_QTY: MAX_QTY,
+    emptyCart: emptyCart,
+    addToCart: addToCart,
+    lineTotal: lineTotal,
+    cartTotal: cartTotal,
+    cartCount: cartCount,
     plain: plain,
     matchProducts: matchProducts
   };

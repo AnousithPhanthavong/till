@@ -192,6 +192,27 @@
   }
   .search:focus { outline: 3px solid var(--brand); outline-offset: 1px; }
 
+  /* the running total at the top of the sell screen */
+  .totalbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    background: var(--brand);
+    color: #fff;
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin: 0 0 14px;
+  }
+  .totalbar .count { font-size: 16px; opacity: 0.85; }
+  .totalbar .sum {
+    font-size: 30px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .item .qty { font-weight: 700; }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -237,6 +258,12 @@
     <h1>Sell</h1>
     <p class="lede" id="s-lede">Type part of a name or a barcode.</p>
 
+    <div class="totalbar">
+      <span class="count" id="s-count">Cart is empty</span>
+      <span class="sum" id="s-total">0 \u20AD</span>
+    </div>
+    <p class="msg" id="s-msg" hidden></p>
+
     <label for="s-search" class="note" style="display:block;margin:0 0 6px">Find a product</label>
     <input id="s-search" class="search" type="text" autocomplete="off"
       autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
@@ -245,6 +272,13 @@
       <h2 id="s-heading">Matches</h2>
       <div id="s-results">
         <div class="empty">Start typing to see products.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Cart</h2>
+      <div id="s-cart">
+        <div class="empty">Nothing in the cart yet. Tap a product above to add it.</div>
       </div>
     </section>
 
@@ -344,7 +378,7 @@
     return typeof Till !== 'undefined' && typeof Till.saveProduct === 'function';
   }
   function cartIsCurrent() {
-    return typeof Sell !== 'undefined' && typeof Sell.matchProducts === 'function';
+    return typeof Sell !== 'undefined' && typeof Sell.addToCart === 'function';
   }
 
   function showStatus() {
@@ -356,7 +390,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Sell build 1';
+      'Sell build 2';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -384,12 +418,18 @@
      so searching as you type does not go back to the saved data each time. */
   var sellProducts = [];
 
+  /* The sale being built. Kept in memory only: it survives going Back,
+     but closing the app empties it. Nothing is saved until checkout. */
+  var cart = { lines: [] };
+
   function openSell() {
     show('sell');
     $('s-search').value = '';
     $('s-lede').textContent = 'Reading products…';
     sellProducts = [];
+    say('s-msg', '', '');
     showMatches();
+    showCart();
 
     Till.listProducts().then(function (rows) {
       sellProducts = rows;
@@ -430,19 +470,70 @@
     var html = '';
     found.forEach(function (p) {
       html +=
-        '<div class="item">' +
+        '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
           '<span class="who">' +
             '<span class="nm">' + esc(p.name) + '</span>' +
             '<span class="sub">' + (p.barcode ? esc(p.barcode) : 'No barcode') + '</span>' +
           '</span>' +
           '<span class="price">' + Till.formatKip(p.priceKip || 0) + '</span>' +
-        '</div>';
+        '</button>';
     });
     $('s-results').innerHTML = html;
   }
 
+  function showCart() {
+    var n = Sell.cartCount(cart);
+    $('s-count').textContent = n === 0 ? 'Cart is empty' : plural(n, 'item', 'items');
+    $('s-total').textContent = Till.formatKip(Sell.cartTotal(cart));
+
+    if (cart.lines.length === 0) {
+      $('s-cart').innerHTML =
+        '<div class="empty">Nothing in the cart yet. Tap a product above to add it.</div>';
+      return;
+    }
+
+    var html = '';
+    cart.lines.forEach(function (l) {
+      html +=
+        '<div class="item">' +
+          '<span class="who">' +
+            '<span class="nm"><span class="qty">' + l.qty + ' \u00D7</span> ' + esc(l.name) + '</span>' +
+            '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
+          '</span>' +
+          '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
+        '</div>';
+    });
+    $('s-cart').innerHTML = html;
+  }
+
+  /* Tapping a match puts it in the cart, then empties the search box
+     ready for the next product. */
+  $('s-results').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    var id = row.getAttribute('data-id');
+    var product = null;
+    sellProducts.forEach(function (p) { if (p.id === id) { product = p; } });
+
+    try {
+      cart = Sell.addToCart(cart, product);
+    } catch (err) {
+      say('s-msg', 'bad', String(err && err.message ? err.message : err));
+      return;
+    }
+
+    say('s-msg', 'good', 'Added: ' + product.name);
+    showCart();
+    $('s-search').value = '';
+    showMatches();
+    $('s-search').focus();
+  });
+
   $('go-sell').addEventListener('click', openSell);
-  $('s-search').addEventListener('input', showMatches);
+  $('s-search').addEventListener('input', function () {
+    say('s-msg', '', '');
+    showMatches();
+  });
   $('s-back').addEventListener('click', function () {
     show('home');
     refresh();
