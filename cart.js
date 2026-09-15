@@ -5,6 +5,7 @@
    Step 1: finding products from what is typed.
    Step 2: the cart and its total.
    Step 3: changing quantities and removing lines.
+   Step 4: recognising a scanned barcode.
 
    A cart is { lines: [...] }. Each line is
    { productId, name, barcode, unitPriceKip, qty }.
@@ -67,6 +68,44 @@
     });
 
     return scored.slice(0, MAX_RESULTS).map(function (s) { return s.product; });
+  }
+
+  /* ---------- scanning ---------- */
+
+  /* Lao digits (໐–໙) and Thai digits (๐–๙) become 0–9, and spaces go.
+     Some keyboards send these instead of normal digits. */
+  function cleanScan(text) {
+    return String(text === null || text === undefined ? '' : text)
+      .replace(/[\u0ED0-\u0ED9]/g, function (c) { return String(c.charCodeAt(0) - 0x0ED0); })
+      .replace(/[\u0E50-\u0E59]/g, function (c) { return String(c.charCodeAt(0) - 0x0E50); })
+      .replace(/\s+/g, '');
+  }
+
+  /* True if the text has Lao letters in it. A scan that arrives like this
+     means the device keyboard is set to Lao, not English. */
+  function hasLaoLetters(text) {
+    return /[\u0E80-\u0ECF\u0EDA-\u0EFF]/.test(String(text || ''));
+  }
+
+  /* The one product whose barcode is exactly what was scanned, or null.
+     A 13-digit code starting with 0 and the same code without that 0
+     count as the same barcode, because scanners differ on this. */
+  function findByBarcode(products, typed) {
+    var code = cleanScan(typed);
+    if (!code) { return null; }
+    var alt = null;
+    if (/^0\d{12}$/.test(code)) { alt = code.slice(1); }
+    if (/^\d{12}$/.test(code)) { alt = '0' + code; }
+
+    var exact = null;
+    var near = null;
+    (products || []).forEach(function (p) {
+      if (!p || p.active === false || !p.barcode) { return; }
+      var b = String(p.barcode);
+      if (b === code && !exact) { exact = p; }
+      if (alt && b === alt && !near) { near = p; }
+    });
+    return exact || near;
   }
 
   /* ---------- the cart ---------- */
@@ -183,6 +222,9 @@
 
   global.Sell = {
     MAX_RESULTS: MAX_RESULTS,
+    cleanScan: cleanScan,
+    hasLaoLetters: hasLaoLetters,
+    findByBarcode: findByBarcode,
     MAX_QTY: MAX_QTY,
     emptyCart: emptyCart,
     addToCart: addToCart,

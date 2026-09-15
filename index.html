@@ -404,7 +404,7 @@
     return typeof Till !== 'undefined' && typeof Till.saveProduct === 'function';
   }
   function cartIsCurrent() {
-    return typeof Sell !== 'undefined' && typeof Sell.removeLine === 'function';
+    return typeof Sell !== 'undefined' && typeof Sell.findByBarcode === 'function';
   }
 
   function showStatus() {
@@ -416,7 +416,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Sell build 3';
+      'Sell build 4';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -544,27 +544,93 @@
     $('s-cart').innerHTML = html;
   }
 
-  /* Tapping a match puts it in the cart, then empties the search box
+  /* Puts one product in the cart, then empties the search box
      ready for the next product. */
+  function addProduct(product) {
+    try {
+      cart = Sell.addToCart(cart, product);
+    } catch (err) {
+      say('s-msg', 'bad', String(err && err.message ? err.message : err));
+      return false;
+    }
+    say('s-msg', 'good', 'Added: ' + product.name);
+    showCart();
+    $('s-search').value = '';
+    showMatches();
+    $('s-search').focus();
+    return true;
+  }
+
   $('s-results').addEventListener('click', function (event) {
     var row = event.target.closest ? event.target.closest('button.item') : null;
     if (!row) { return; }
     var id = row.getAttribute('data-id');
     var product = null;
     sellProducts.forEach(function (p) { if (p.id === id) { product = p; } });
+    addProduct(product);
+  });
 
-    try {
-      cart = Sell.addToCart(cart, product);
-    } catch (err) {
-      say('s-msg', 'bad', String(err && err.message ? err.message : err));
+  /* Enter (or Tab) in the search box: this is what a scanner sends after
+     the barcode. Only an exact barcode adds anything. */
+  function handleScan() {
+    var typed = $('s-search').value;
+    var code = Sell.cleanScan(typed);
+    if (!code) { return; }
+
+    var product = Sell.findByBarcode(sellProducts, typed);
+    if (product) { addProduct(product); return; }
+
+    var matches = Sell.matchProducts(sellProducts, typed);
+
+    if (Sell.hasLaoLetters(typed) && matches.length === 0) {
+      say('s-msg', 'bad', 'Nothing matches. If this was a scan, the keyboard is set to Lao: switch it to English, then scan again.');
+    } else if (/^\d{6,}$/.test(code)) {
+      say('s-msg', 'bad', 'Barcode ' + code + ' is not in your products. Nothing was added. Add it on the Products screen.');
+    } else if (matches.length > 0) {
+      say('s-msg', 'bad', 'Tap the product in the list to add it.');
+      return;
+    } else {
+      say('s-msg', 'bad', 'Nothing matches. Check the spelling.');
       return;
     }
-
-    say('s-msg', 'good', 'Added: ' + product.name);
-    showCart();
+    /* Clear the box so the next scan starts fresh. */
     $('s-search').value = '';
     showMatches();
     $('s-search').focus();
+  }
+
+  $('s-search').addEventListener('keydown', function (event) {
+    var enter = event.key === 'Enter' || event.keyCode === 13;
+    var tab = event.key === 'Tab' || event.keyCode === 9;
+    if (!enter && !tab) { return; }
+    if (tab && !Sell.cleanScan($('s-search').value)) { return; }
+    event.preventDefault();
+    handleScan();
+  });
+
+  /* A scanner types wherever the focus is. After tapping + or Remove the
+     focus is on that button, so a scan would be lost. Any typing that is
+     not already going into a text box is sent to the search box instead. */
+  document.addEventListener('keydown', function (event) {
+    if ($('screen-sell').hidden) { return; }
+    if (event.ctrlKey || event.metaKey || event.altKey) { return; }
+    var el = document.activeElement;
+    if (el === $('s-search')) { return; }
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) { return; }
+
+    var enter = event.key === 'Enter' || event.keyCode === 13;
+    if (event.key && event.key.length === 1) {
+      event.preventDefault();
+      $('s-search').focus();
+      $('s-search').value += event.key;
+      say('s-msg', '', '');
+      showMatches();
+    } else if (enter && $('s-search').value) {
+      /* Stop Enter from pressing whichever button has the focus. */
+      event.preventDefault();
+      $('s-search').focus();
+      handleScan();
+    }
   });
 
   /* The minus, plus and Remove buttons on each cart line. */
