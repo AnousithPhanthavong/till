@@ -84,6 +84,23 @@
   .sale .total { font-weight: 700; font-size: 21px; }
   .sale .fefo { color: var(--muted); font-size: 15px; }
 
+  /* one product in the catalog list */
+  .item {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 13px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .panel h2 + .item { border-top: 0; }
+  .item .who { min-width: 0; }
+  .item .nm { font-weight: 600; }
+  .item .sub { font-size: 14px; color: var(--muted); }
+  .item .price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .empty { padding: 16px 18px 20px; color: var(--muted); font-size: 16px; }
+  .note { font-size: 15px; color: var(--muted); margin: -4px 0 20px; }
+
   button {
     font: inherit;
     font-weight: 600;
@@ -106,7 +123,13 @@
     border: 1px solid var(--line);
   }
   button.quiet:active { background: #F6EAE8; }
-  button[disabled] { opacity: 0.5; }
+  button.secondary {
+    background: transparent;
+    color: var(--brand);
+    border: 1px solid var(--line);
+  }
+  button.secondary:active { background: #E6EDE9; }
+  button[disabled] { opacity: 0.5; cursor: default; }
 
   footer {
     margin-top: 24px;
@@ -120,24 +143,51 @@
 <main>
   <p class="shopname">Baby shop till</p>
 
-  <h1 id="verdict">Checking…</h1>
-  <p class="lede" id="lede">Reading what is saved on this iPad.</p>
+  <!-- ===================== HOME SCREEN ===================== -->
+  <section id="screen-home">
 
-  <section class="panel">
-    <h2>Saved on this iPad</h2>
-    <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
-    <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
-    <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
-    <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
+    <h1 id="verdict">Checking…</h1>
+    <p class="lede" id="lede">Reading what is saved on this device.</p>
+
+    <section class="panel">
+      <h2>Saved on this device</h2>
+      <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
+      <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
+      <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
+      <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
+    </section>
+
+    <section class="panel" id="last-panel" hidden>
+      <h2>Most recent sale</h2>
+      <div class="sale" id="last-sale"></div>
+    </section>
+
+    <button id="go-products">Products</button>
+
+    <button id="add">Save a test sale</button>
+    <button id="clear" class="quiet">Delete all test data</button>
+
   </section>
 
-  <section class="panel" id="last-panel" hidden>
-    <h2>Most recent sale</h2>
-    <div class="sale" id="last-sale"></div>
-  </section>
+  <!-- =================== PRODUCTS SCREEN =================== -->
+  <section id="screen-products" hidden>
 
-  <button id="add">Save a test sale</button>
-  <button id="clear" class="quiet">Delete all test data</button>
+    <h1>Products</h1>
+    <p class="lede" id="p-count">Reading…</p>
+
+    <section class="panel">
+      <h2>Everything you sell</h2>
+      <div id="product-list">
+        <div class="empty">Reading…</div>
+      </div>
+    </section>
+
+    <button id="go-add" disabled>Add product</button>
+    <p class="note">The add form is the next piece. This screen only lists what is already saved.</p>
+
+    <button id="back-home" class="secondary">Back</button>
+
+  </section>
 
   <footer id="status">Checking the app…</footer>
 </main>
@@ -148,6 +198,15 @@
 
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
 
+  /* Turns any characters that would confuse the page into safe text.
+     A product named 5 < 6 should show as 5 < 6, not break the list. */
+  function esc(text) {
+    return String(text === null || text === undefined ? '' : text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function showStatus() {
     var home = window.navigator.standalone === true ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -157,8 +216,63 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Foundation build 2';
+      'Catalog build 1';
   }
+
+  /* ---------- moving between the two screens ---------- */
+
+  function show(which) {
+    $('screen-home').hidden = (which !== 'home');
+    $('screen-products').hidden = (which !== 'products');
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- the products screen ---------- */
+
+  function loadProducts() {
+    $('product-list').innerHTML = '<div class="empty">Reading…</div>';
+    $('p-count').textContent = 'Reading…';
+
+    return Till.getAll('products').then(function (rows) {
+      rows = rows.filter(function (p) { return p.active !== false; });
+      rows.sort(function (a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+
+      $('p-count').textContent = rows.length === 0
+        ? 'Nothing saved yet.'
+        : plural(rows.length, 'product saved.', 'products saved.');
+
+      if (rows.length === 0) {
+        $('product-list').innerHTML =
+          '<div class="empty">No products yet. Once the add form is built, everything you add appears in this list.</div>';
+        return;
+      }
+
+      var html = '';
+      rows.forEach(function (p) {
+        var sub = p.barcode ? esc(p.barcode) : 'No barcode';
+        if (p.tracksExpiry) { sub += ' · has expiry dates'; }
+
+        html +=
+          '<div class="item">' +
+            '<div class="who">' +
+              '<div class="nm">' + esc(p.name) + '</div>' +
+              '<div class="sub">' + sub + '</div>' +
+            '</div>' +
+            '<div class="price">' + Till.formatKip(p.priceKip || 0) + '</div>' +
+          '</div>';
+      });
+      $('product-list').innerHTML = html;
+
+    }).catch(function (err) {
+      $('p-count').textContent = 'The list could not be read.';
+      $('product-list').innerHTML =
+        '<div class="empty">' + esc(err && err.message ? err.message : err) + '</div>';
+    });
+  }
+
+  /* ---------- the home screen ---------- */
 
   function showLastSale(data) {
     if (!data) {
@@ -171,11 +285,11 @@
     var html = '';
 
     data.lines.forEach(function (line) {
-      html += '<p>' + line.qty + ' \u00D7 ' + line.name +
+      html += '<p>' + line.qty + ' \u00D7 ' + esc(line.name) +
         ' at ' + Till.formatKip(line.unitPriceKip) +
         ' = ' + Till.formatKip(line.lineTotalKip) + '</p>' +
-        '<p class="fefo">from batch ' + line.batchCode +
-        ', expires ' + (line.expiry || 'no expiry') + '</p>';
+        '<p class="fefo">from batch ' + esc(line.batchCode) +
+        ', expires ' + esc(line.expiry || 'no expiry') + '</p>';
     });
 
     html += '<p class="total">Total ' + Till.formatKip(sale.totalKip) + '</p>';
@@ -212,6 +326,18 @@
       });
   }
 
+  /* ---------- buttons ---------- */
+
+  $('go-products').addEventListener('click', function () {
+    show('products');
+    loadProducts();
+  });
+
+  $('back-home').addEventListener('click', function () {
+    show('home');
+    refresh();
+  });
+
   $('add').addEventListener('click', function () {
     $('add').disabled = true;
     Till.selfTest()
@@ -225,7 +351,7 @@
   });
 
   $('clear').addEventListener('click', function () {
-    if (!window.confirm('Delete every product, batch and sale saved on this iPad?')) { return; }
+    if (!window.confirm('Delete every product, batch and sale saved on this device?')) { return; }
     $('clear').disabled = true;
     Till.wipe()
       .then(refresh)
@@ -240,6 +366,7 @@
   window.addEventListener('offline', showStatus);
 
   showStatus();
+  show('home');
   refresh();
 </script>
 </body>
