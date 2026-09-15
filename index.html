@@ -213,6 +213,31 @@
   }
   .item .qty { font-weight: 700; }
 
+  /* one line in the cart, with its buttons underneath */
+  .cartline { padding: 13px 18px; border-top: 1px solid var(--line); }
+  .cartline .top { display: flex; justify-content: space-between; gap: 14px; }
+  .cartline .nm { display: block; font-weight: 600; }
+  .cartline .sub { display: block; font-size: 14px; color: var(--muted); }
+  .cartline .price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .cartline .controls { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .cartline .controls button {
+    width: auto;
+    min-width: 52px;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 14px;
+    font-size: 22px;
+    line-height: 1;
+  }
+  .cartline .controls .n {
+    min-width: 3ch;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .cartline .controls .remove { margin-left: auto; font-size: 16px; }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -282,6 +307,7 @@
       </div>
     </section>
 
+    <button id="s-clear" class="quiet" hidden>Clear cart</button>
     <button id="s-back" class="secondary">Back</button>
 
   </section>
@@ -378,7 +404,7 @@
     return typeof Till !== 'undefined' && typeof Till.saveProduct === 'function';
   }
   function cartIsCurrent() {
-    return typeof Sell !== 'undefined' && typeof Sell.addToCart === 'function';
+    return typeof Sell !== 'undefined' && typeof Sell.removeLine === 'function';
   }
 
   function showStatus() {
@@ -390,7 +416,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Sell build 2';
+      'Sell build 3';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -485,6 +511,7 @@
     var n = Sell.cartCount(cart);
     $('s-count').textContent = n === 0 ? 'Cart is empty' : plural(n, 'item', 'items');
     $('s-total').textContent = Till.formatKip(Sell.cartTotal(cart));
+    $('s-clear').hidden = cart.lines.length === 0;
 
     if (cart.lines.length === 0) {
       $('s-cart').innerHTML =
@@ -494,13 +521,24 @@
 
     var html = '';
     cart.lines.forEach(function (l) {
+      var id = esc(l.productId);
       html +=
-        '<div class="item">' +
-          '<span class="who">' +
-            '<span class="nm"><span class="qty">' + l.qty + ' \u00D7</span> ' + esc(l.name) + '</span>' +
-            '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
-          '</span>' +
-          '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
+        '<div class="cartline">' +
+          '<div class="top">' +
+            '<span>' +
+              '<span class="nm"><span class="qty">' + l.qty + ' \u00D7</span> ' + esc(l.name) + '</span>' +
+              '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
+            '</span>' +
+            '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
+          '</div>' +
+          '<div class="controls">' +
+            '<button type="button" class="secondary" data-act="minus" data-id="' + id + '"' +
+              (l.qty <= 1 ? ' disabled' : '') + ' aria-label="One less">\u2212</button>' +
+            '<span class="n">' + l.qty + '</span>' +
+            '<button type="button" class="secondary" data-act="plus" data-id="' + id + '"' +
+              ' aria-label="One more">+</button>' +
+            '<button type="button" class="quiet remove" data-act="remove" data-id="' + id + '">Remove</button>' +
+          '</div>' +
         '</div>';
     });
     $('s-cart').innerHTML = html;
@@ -527,6 +565,37 @@
     $('s-search').value = '';
     showMatches();
     $('s-search').focus();
+  });
+
+  /* The minus, plus and Remove buttons on each cart line. */
+  $('s-cart').addEventListener('click', function (event) {
+    var btn = event.target.closest ? event.target.closest('button[data-act]') : null;
+    if (!btn || btn.disabled) { return; }
+    var id = btn.getAttribute('data-id');
+    var act = btn.getAttribute('data-act');
+
+    try {
+      if (act === 'plus') { cart = Sell.changeQty(cart, id, 1); }
+      if (act === 'minus') { cart = Sell.changeQty(cart, id, -1); }
+      if (act === 'remove') { cart = Sell.removeLine(cart, id); }
+    } catch (err) {
+      say('s-msg', 'bad', String(err && err.message ? err.message : err));
+      showCart();
+      return;
+    }
+    say('s-msg', '', '');
+    showCart();
+  });
+
+  $('s-clear').addEventListener('click', function () {
+    if (!window.confirm('Take everything out of the cart?')) { return; }
+    cart = Sell.emptyCart();
+    showCart();
+    if (Sell.cartCount(cart) === 0 && $('s-cart').querySelector('.cartline') === null) {
+      say('s-msg', 'good', 'Cart cleared.');
+    } else {
+      say('s-msg', 'bad', 'The cart did not clear. Close the app and open it again.');
+    }
   });
 
   $('go-sell').addEventListener('click', openSell);

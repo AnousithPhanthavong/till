@@ -4,6 +4,7 @@
 
    Step 1: finding products from what is typed.
    Step 2: the cart and its total.
+   Step 3: changing quantities and removing lines.
 
    A cart is { lines: [...] }. Each line is
    { productId, name, barcode, unitPriceKip, qty }.
@@ -126,6 +127,39 @@
     return { lines: lines };
   }
 
+  /* Raises or lowers one line by `step` (+1 or -1). Stays between 1 and
+     the limit: taking a line to zero is done with removeLine, on purpose,
+     so a mistaken tap on minus never makes an item disappear.
+     The line keeps its place in the cart. */
+  function changeQty(cart, productId, step) {
+    if (step !== 1 && step !== -1) {
+      throw new Error('Quantity can only change by one at a time.');
+    }
+    var lines = copyLines(cart);
+    var found = null;
+    lines.forEach(function (l) { if (l.productId === productId) { found = l; } });
+    if (!found) {
+      throw new Error('That item is no longer in the cart.');
+    }
+    var next = found.qty + step;
+    if (next < 1) { next = 1; }
+    if (next > MAX_QTY) {
+      throw new Error('Cannot sell more than ' + MAX_QTY + ' of one product in a sale.');
+    }
+    found.qty = next;
+    return { lines: lines };
+  }
+
+  /* Takes one line out of the cart. Other lines keep their order. */
+  function removeLine(cart, productId) {
+    var lines = copyLines(cart);
+    var kept = lines.filter(function (l) { return l.productId !== productId; });
+    if (kept.length === lines.length) {
+      throw new Error('That item is no longer in the cart.');
+    }
+    return { lines: kept };
+  }
+
   function lineTotal(line) {
     return line.unitPriceKip * line.qty;
   }
@@ -152,6 +186,8 @@
     MAX_QTY: MAX_QTY,
     emptyCart: emptyCart,
     addToCart: addToCart,
+    changeQty: changeQty,
+    removeLine: removeLine,
     lineTotal: lineTotal,
     cartTotal: cartTotal,
     cartCount: cartCount,
