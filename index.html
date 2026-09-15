@@ -272,6 +272,36 @@
     font-variant-numeric: tabular-nums;
   }
   .quick .tag { display: block; font-size: 13px; font-weight: 600; line-height: 1.1; }
+  /* paying by QR */
+  .qrbox { padding: 4px 18px 18px; }
+  .qrbox .ask { margin: 10px 0 0; font-size: 16px; color: var(--muted); }
+  .qrbox .amount { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 0 0 8px; }
+  .qrbox ol { margin: 6px 0 14px; padding-left: 22px; font-size: 16px; }
+  .qrbox label.ref { display: block; font-size: 15px; color: var(--muted); margin: 6px 0 6px; }
+  .qrbox input[type="text"] {
+    font: inherit;
+    width: 100%;
+    min-height: 50px;
+    padding: 10px 14px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .qrbox input[type="text"]:focus { outline: 3px solid var(--brand); outline-offset: 1px; }
+  .qrbox .hint { font-size: 14px; color: var(--muted); margin: 6px 0 14px; }
+  .seen {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 14px;
+    margin: 0 0 14px;
+    border-radius: 12px;
+    background: #FFF6E0;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .seen input { width: 28px; height: 28px; margin: 1px 0 0; flex: none; }
   .complete { font-size: 22px; min-height: 64px; margin-bottom: 0; }
 
   /* one line in the cart, with its buttons underneath */
@@ -401,6 +431,27 @@
       </div>
     </section>
 
+    <section class="panel" id="qr-panel" hidden>
+      <h2>QR</h2>
+      <div class="qrbox">
+        <p class="ask">The customer must send exactly</p>
+        <p class="amount" id="qr-amount"></p>
+        <ol>
+          <li>The customer scans your shop QR and pays.</li>
+          <li>Open your bank app and check the money has arrived, with the right amount.</li>
+        </ol>
+        <label class="ref" for="qr-ref">Bank reference (optional)</label>
+        <input id="qr-ref" type="text" maxlength="40" autocomplete="off"
+          autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done">
+        <p class="hint">A few characters from the payment in your bank app, so you can find it later.</p>
+        <label class="seen" for="qr-seen">
+          <input id="qr-seen" type="checkbox">
+          <span>I have seen this money arrive in my bank app</span>
+        </label>
+        <button type="button" class="complete" id="qr-complete" disabled>Payment received</button>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>In this sale</h2>
       <div id="pay-lines"></div>
@@ -514,7 +565,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Checkout build 2';
+      'Checkout build 3';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -809,6 +860,7 @@
     });
     $('pay-lines').innerHTML = html;
     resetCash();
+    resetQr();
 
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('pay');
@@ -819,15 +871,50 @@
     $('pay-cash').setAttribute('aria-pressed', method === 'cash' ? 'true' : 'false');
     $('pay-qr').setAttribute('aria-pressed', method === 'qr' ? 'true' : 'false');
     $('cash-panel').hidden = method !== 'cash';
+    $('qr-panel').hidden = method !== 'qr';
 
     if (method === 'cash') {
       say('pay-msg', '', '');
       showChange();
       $('cash-in').focus();
     } else {
-      say('pay-msg', 'good', 'QR chosen. The QR part of checkout is not built yet.');
+      say('pay-msg', '', '');
+      /* Always untick, so the box is ticked for this payment only. */
+      $('qr-seen').checked = false;
+      showQr();
     }
   }
+
+  /* ---------- QR ---------- */
+
+  function resetQr() {
+    $('qr-panel').hidden = true;
+    $('qr-ref').value = '';
+    $('qr-seen').checked = false;
+    $('qr-amount').textContent = Till.formatKip(Sell.cartTotal(cart));
+    showQr();
+  }
+
+  /* Payment received works only after the box is ticked. */
+  function showQr() {
+    $('qr-complete').disabled = !$('qr-seen').checked;
+  }
+
+  $('qr-seen').addEventListener('change', showQr);
+
+  /* Enter or Done in the reference box just closes the keyboard. */
+  $('qr-ref').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      $('qr-ref').blur();
+    }
+  });
+
+  $('qr-complete').addEventListener('click', function () {
+    if ($('qr-complete').disabled || !$('qr-seen').checked) { return; }
+    say('pay-msg', 'good', 'QR is ready. Saving the sale comes in the next step, so nothing was saved.');
+    window.scrollTo(0, 0);
+  });
 
   /* ---------- cash ---------- */
 
@@ -925,7 +1012,7 @@
     var el = document.activeElement;
     var enterOrSpace = event.key === 'Enter' || event.keyCode === 13 ||
       event.key === ' ' || event.keyCode === 32;
-    if (enterOrSpace && el && el.tagName === 'BUTTON') {
+    if (enterOrSpace && el && (el.tagName === 'BUTTON' || el.type === 'checkbox')) {
       event.preventDefault();
     }
   });
