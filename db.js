@@ -148,6 +148,17 @@
     });
   }
 
+  function get(storeName, id) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(storeName, 'readonly');
+        var request = t.objectStore(storeName).get(id);
+        request.onsuccess = function () { resolve(request.result || null); };
+        request.onerror = function () { reject(request.error); };
+      });
+    });
+  }
+
   function counts() {
     return Promise.all([
       count('products'), count('batches'), count('sales'), count('saleLines')
@@ -186,6 +197,94 @@
         t.oncomplete = function () { resolve(true); };
         t.onerror = function () { reject(t.error); };
         t.onabort = function () { reject(t.error || new Error('Clearing was cancelled')); };
+      });
+    });
+  }
+
+  /* ---------- products ---------- */
+
+  /* Keeps only the digits. "185,000" and "185 000 kip" both become 185000,
+     so it does not matter how the price gets typed. */
+  function toKip(text) {
+    var digits = String(text === null || text === undefined ? '' : text)
+      .replace(/[^0-9]/g, '');
+    return digits === '' ? null : parseInt(digits, 10);
+  }
+
+  /* Selling prices land on the nearest 500 kip, because there is no coin
+     smaller than that in daily use. Cost prices are left exactly as paid. */
+  function roundPriceKip(amount) {
+    var rounded = Math.round(amount / 500) * 500;
+    return rounded < 500 ? 500 : rounded;
+  }
+
+  /* Every product in the catalog, by name. Hidden ones are left out. */
+  function listProducts() {
+    return getAll('products').then(function (rows) {
+      return rows
+        .filter(function (p) { return p.active !== false; })
+        .sort(function (a, b) {
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+    });
+  }
+
+  /* Saves one product. No id means a new product, an id means an edit.
+     Everything is checked here so no screen can write a bad record. */
+  function saveProduct(input) {
+    var name = String(input.name || '').trim().replace(/\s+/g, ' ');
+    var barcode = String(input.barcode || '').replace(/\s+/g, '');
+    var priceKip = toKip(input.priceKip);
+    var costKip = toKip(input.costKip);
+
+    if (!name) {
+      return Promise.reject(new Error('Give the product a name.'));
+    }
+    if (priceKip === null || priceKip <= 0) {
+      return Promise.reject(new Error('Give the product a selling price.'));
+    }
+    if (costKip === null) { costKip = 0; }
+
+    priceKip = roundPriceKip(priceKip);
+
+    var check = barcode
+      ? byIndex('products', 'barcode', barcode)
+      : Promise.resolve([]);
+
+    return check.then(function (found) {
+      var clash = found.filter(function (p) {
+        return p.active !== false && p.id !== input.id;
+      });
+      if (clash.length) {
+        return Promise.reject(
+          new Error('That barcode is already on "' + clash[0].name + '".')
+        );
+      }
+
+      if (!input.id) {
+        return put('products', {
+          id: newId('prod'),
+          barcode: barcode,
+          name: name,
+          costKip: costKip,
+          priceKip: priceKip,
+          tracksExpiry: !!input.tracksExpiry,
+          active: true,
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      return get('products', input.id).then(function (existing) {
+        if (!existing) {
+          return Promise.reject(new Error('That product is no longer saved.'));
+        }
+        existing.barcode = barcode;
+        existing.name = name;
+        existing.costKip = costKip;
+        existing.priceKip = priceKip;
+        existing.tracksExpiry = !!input.tracksExpiry;
+        existing.updatedAt = new Date().toISOString();
+        return put('products', existing);
       });
     });
   }
@@ -306,10 +405,15 @@
     put: put,
     putMany: putMany,
     getAll: getAll,
+    get: get,
     byIndex: byIndex,
     count: count,
     counts: counts,
     batchesForProduct: batchesForProduct,
+    listProducts: listProducts,
+    saveProduct: saveProduct,
+    roundPriceKip: roundPriceKip,
+    toKip: toKip,
     wipe: wipe,
     newId: newId,
     formatKip: formatKip,

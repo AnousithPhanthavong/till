@@ -101,6 +101,37 @@
   .empty { padding: 16px 18px 20px; color: var(--muted); font-size: 16px; }
   .note { font-size: 15px; color: var(--muted); margin: -4px 0 20px; }
 
+  /* the add / edit form */
+  .field { padding: 14px 18px; border-top: 1px solid var(--line); }
+  .panel h2 + .field { border-top: 0; }
+  .field label { display: block; font-size: 15px; color: var(--muted); margin-bottom: 6px; }
+  .field input {
+    font: inherit;
+    width: 100%;
+    min-height: 50px;
+    padding: 11px 14px;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .field input:focus { outline: 3px solid var(--brand); outline-offset: 1px; }
+  .field .hint { font-size: 14px; color: var(--muted); margin: 7px 0 0; }
+
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    padding: 15px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .check input { width: 26px; height: 26px; margin: 3px 0 0; flex: none; }
+  .check .sub { font-size: 14px; color: var(--muted); }
+
+  .msg { margin: 0 0 16px; font-size: 16px; }
+  .msg[data-state="bad"] { color: var(--bad); font-weight: 600; }
+  .msg[data-state="good"] { color: var(--good); font-weight: 600; }
+
   button {
     font: inherit;
     font-weight: 600;
@@ -174,6 +205,7 @@
 
     <h1>Products</h1>
     <p class="lede" id="p-count">Reading…</p>
+    <p class="msg" id="p-msg" hidden></p>
 
     <section class="panel">
       <h2>Everything you sell</h2>
@@ -182,10 +214,56 @@
       </div>
     </section>
 
-    <button id="go-add" disabled>Add product</button>
-    <p class="note">The add form is the next piece. This screen only lists what is already saved.</p>
-
+    <button id="go-add">Add product</button>
     <button id="back-home" class="secondary">Back</button>
+
+  </section>
+
+  <!-- ===================== ADD A PRODUCT ==================== -->
+  <section id="screen-form" hidden>
+
+    <h1 id="f-title">Add product</h1>
+    <p class="lede">Stock quantities are not here — those come in with each delivery, later.</p>
+    <p class="msg" id="f-msg" hidden></p>
+
+    <section class="panel">
+      <h2>The product</h2>
+
+      <div class="field">
+        <label for="f-name">Name</label>
+        <input id="f-name" type="text" autocomplete="off" autocapitalize="sentences">
+        <p class="hint">What you would call it out loud. This is what you search for on the sell screen.</p>
+      </div>
+
+      <div class="field">
+        <label for="f-barcode">Barcode</label>
+        <input id="f-barcode" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off">
+        <p class="hint">Leave empty if the item has no barcode, like most clothing.</p>
+      </div>
+
+      <div class="field">
+        <label for="f-price">Selling price</label>
+        <input id="f-price" type="text" inputmode="numeric" autocomplete="off">
+        <p class="hint">Whole kip. Rounded to the nearest 500 when saved.</p>
+      </div>
+
+      <div class="field">
+        <label for="f-cost">Cost price</label>
+        <input id="f-cost" type="text" inputmode="numeric" autocomplete="off">
+        <p class="hint">What you pay the supplier. Leave empty if you do not know it yet.</p>
+      </div>
+
+      <div class="check">
+        <input id="f-expiry" type="checkbox">
+        <label for="f-expiry">
+          This has expiry dates
+          <span class="sub">Tick for formula, food and medicine. Leave off for clothing and toys.</span>
+        </label>
+      </div>
+    </section>
+
+    <button id="f-save">Save product</button>
+    <button id="f-cancel" class="secondary">Cancel</button>
 
   </section>
 
@@ -216,7 +294,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Catalog build 1';
+      'Catalog build 2';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -224,7 +302,17 @@
   function show(which) {
     $('screen-home').hidden = (which !== 'home');
     $('screen-products').hidden = (which !== 'products');
+    $('screen-form').hidden = (which !== 'form');
     window.scrollTo(0, 0);
+  }
+
+  /* One line of feedback above a list or form. */
+  function say(id, state, text) {
+    var el = $(id);
+    if (!text) { el.hidden = true; el.textContent = ''; return; }
+    el.hidden = false;
+    el.setAttribute('data-state', state);
+    el.textContent = text;
   }
 
   /* ---------- the products screen ---------- */
@@ -233,19 +321,14 @@
     $('product-list').innerHTML = '<div class="empty">Reading…</div>';
     $('p-count').textContent = 'Reading…';
 
-    return Till.getAll('products').then(function (rows) {
-      rows = rows.filter(function (p) { return p.active !== false; });
-      rows.sort(function (a, b) {
-        return String(a.name || '').localeCompare(String(b.name || ''));
-      });
-
+    return Till.listProducts().then(function (rows) {
       $('p-count').textContent = rows.length === 0
         ? 'Nothing saved yet.'
         : plural(rows.length, 'product saved.', 'products saved.');
 
       if (rows.length === 0) {
         $('product-list').innerHTML =
-          '<div class="empty">No products yet. Once the add form is built, everything you add appears in this list.</div>';
+          '<div class="empty">No products yet. Tap Add product below.</div>';
         return;
       }
 
@@ -329,8 +412,50 @@
   /* ---------- buttons ---------- */
 
   $('go-products').addEventListener('click', function () {
+    say('p-msg', '', '');
     show('products');
     loadProducts();
+  });
+
+  function openForm() {
+    $('f-name').value = '';
+    $('f-barcode').value = '';
+    $('f-price').value = '';
+    $('f-cost').value = '';
+    $('f-expiry').checked = false;
+    say('f-msg', '', '');
+    $('f-save').disabled = false;
+    show('form');
+    $('f-name').focus();
+  }
+
+  $('go-add').addEventListener('click', openForm);
+
+  $('f-cancel').addEventListener('click', function () {
+    say('p-msg', '', '');
+    show('products');
+  });
+
+  $('f-save').addEventListener('click', function () {
+    say('f-msg', '', '');
+    $('f-save').disabled = true;
+
+    Till.saveProduct({
+      name: $('f-name').value,
+      barcode: $('f-barcode').value,
+      priceKip: $('f-price').value,
+      costKip: $('f-cost').value,
+      tracksExpiry: $('f-expiry').checked
+    }).then(function (saved) {
+      say('p-msg', 'good',
+        'Saved: ' + saved.name + ' at ' + Till.formatKip(saved.priceKip));
+      show('products');
+      return loadProducts();
+    }).catch(function (err) {
+      say('f-msg', 'bad', String(err && err.message ? err.message : err));
+    }).then(function () {
+      $('f-save').disabled = false;
+    });
   });
 
   $('back-home').addEventListener('click', function () {
