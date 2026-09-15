@@ -395,7 +395,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.removeSelfTestData === 'function';
+    return typeof Till !== 'undefined' && typeof Till.saveSale === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.findByBarcode === 'function';

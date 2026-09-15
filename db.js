@@ -372,6 +372,183 @@
     });
   }
 
+  /* ---------- sales ---------- */
+
+  var MAX_LINE_QTY = 999;
+  var MAX_REFERENCE = 40;
+
+  /* Today's date on the iPad's own clock, YYYY-MM-DD.
+     (toISOString would give the date in London time, which is a day behind
+     Laos between midnight and 7 in the morning.) */
+  function localDate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  function isPositiveKip(n) {
+    return typeof n === 'number' && Number.isSafeInteger(n) && n > 0;
+  }
+
+  /* Checks the cart and payment and builds the records to save.
+     Throws a plain-language error if anything is wrong. Saves nothing. */
+  function buildSale(saleId, cart, payment, now) {
+    if (typeof saleId !== 'string' || !/^sale_[a-z0-9_]+$/.test(saleId)) {
+      throw new Error('This sale has no proper number. Go back and press Pay again.');
+    }
+    var lines = (cart && cart.lines) || [];
+    if (!lines.length) {
+      throw new Error('The cart is empty.');
+    }
+
+    var total = 0;
+    var itemCount = 0;
+    var seen = {};
+    var saleLines = lines.map(function (l, i) {
+      if (!l || typeof l.productId !== 'string' || !l.productId) {
+        throw new Error('Item ' + (i + 1) + ' in the cart is not a proper product.');
+      }
+      if (seen[l.productId]) {
+        throw new Error('"' + l.name + '" is in the cart twice.');
+      }
+      seen[l.productId] = true;
+      if (!isPositiveKip(l.unitPriceKip)) {
+        throw new Error('"' + l.name + '" has no proper price.');
+      }
+      if (!Number.isInteger(l.qty) || l.qty < 1 || l.qty > MAX_LINE_QTY) {
+        throw new Error('"' + l.name + '" has a wrong quantity.');
+      }
+      var lineTotal = l.unitPriceKip * l.qty;
+      total += lineTotal;
+      itemCount += l.qty;
+      return {
+        id: saleId + '_L' + (i + 1),
+        saleId: saleId,
+        lineNo: i + 1,
+        productId: l.productId,
+        name: String(l.name || ''),
+        barcode: String(l.barcode || ''),
+        unitPriceKip: l.unitPriceKip,
+        qty: l.qty,
+        lineTotalKip: lineTotal
+      };
+    });
+
+    if (!Number.isSafeInteger(total) || total <= 0) {
+      throw new Error('The total is not right. Clear the cart and start again.');
+    }
+
+    var method = payment && payment.method;
+    var receivedKip, changeKip, reference = '';
+
+    if (method === 'cash') {
+      receivedKip = payment.receivedKip;
+      if (!Number.isSafeInteger(receivedKip) || receivedKip <= 0) {
+        throw new Error('Enter the cash received.');
+      }
+      if (receivedKip < total) {
+        throw new Error('Cash received is ' + formatKip(total - receivedKip) + ' short.');
+      }
+      changeKip = receivedKip - total;
+    } else if (method === 'qr') {
+      receivedKip = total;
+      changeKip = 0;
+      reference = String(payment.reference || '').trim().replace(/\s+/g, ' ');
+      if (reference.length > MAX_REFERENCE) {
+        throw new Error('The QR reference is too long (' + MAX_REFERENCE + ' characters at most).');
+      }
+    } else {
+      throw new Error('Choose Cash or QR.');
+    }
+
+    var sale = {
+      id: saleId,
+      type: 'sale',
+      at: now.toISOString(),
+      date: localDate(now),
+      totalKip: total,
+      itemCount: itemCount,
+      lineCount: saleLines.length,
+      method: method,
+      receivedKip: receivedKip,
+      changeKip: changeKip,
+      reference: reference
+    };
+
+    return { sale: sale, lines: saleLines };
+  }
+
+  /* A fresh id for a sale. The Pay screen asks for one when it opens and
+     keeps it, so pressing Complete twice can only ever save one sale. */
+  function newSaleId() {
+    return newId('sale');
+  }
+
+  /* Saves a completed sale and its lines together, all or nothing.
+     - Never changes or overwrites an existing sale.
+     - If a sale with this id is already saved (a double tap, or a retry),
+       it returns that saved sale instead of saving a second one.
+     - Gives each sale the next receipt number: 1, 2, 3 ...
+     - Does not touch stock yet. That arrives with Step 6.
+     Resolves to { sale, lines, alreadySaved }. */
+  function saveSale(saleId, cart, payment) {
+    var built;
+    try {
+      built = buildSale(saleId, cart, payment, new Date());
+    } catch (err) {
+      return Promise.reject(err);
+    }
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['sales', 'saleLines'], 'readwrite');
+        var sales = t.objectStore('sales');
+        var linesStore = t.objectStore('saleLines');
+        var result = null;
+
+        sales.get(saleId).onsuccess = function (e) {
+          var existing = e.target.result;
+          if (existing) {
+            linesStore.index('saleId').getAll(saleId).onsuccess = function (e2) {
+              var saved = e2.target.result.sort(function (a, b) { return a.lineNo - b.lineNo; });
+              result = { sale: existing, lines: saved, alreadySaved: true };
+            };
+            return;
+          }
+
+          /* Next receipt number = highest so far + 1. Worked out inside
+             this same save, so two saves can never get the same number. */
+          sales.getAll().onsuccess = function (e3) {
+            var highest = 0;
+            e3.target.result.forEach(function (s) {
+              if (Number.isInteger(s.number) && s.number > highest) { highest = s.number; }
+            });
+            built.sale.number = highest + 1;
+
+            /* add, not put: add refuses to overwrite anything. */
+            sales.add(built.sale);
+            built.lines.forEach(function (l) { linesStore.add(l); });
+            result = { sale: built.sale, lines: built.lines, alreadySaved: false };
+          };
+        };
+
+        t.oncomplete = function () { resolve(result); };
+        t.onerror = function () { reject(new Error('The sale was NOT saved. Try Complete again.')); };
+        t.onabort = function () { reject(new Error('The sale was NOT saved. Try Complete again.')); };
+      });
+    });
+  }
+
+  /* One saved sale with its lines, or null. */
+  function getSale(saleId) {
+    return Promise.all([get('sales', saleId), byIndex('saleLines', 'saleId', saleId)])
+      .then(function (r) {
+        if (!r[0]) { return null; }
+        return { sale: r[0], lines: r[1].sort(function (a, b) { return a.lineNo - b.lineNo; }) };
+      });
+  }
+
   global.Till = {
     open: open,
     put: put,
@@ -391,7 +568,11 @@
     formatKip: formatKip,
     today: today,
     findSelfTestData: findSelfTestData,
-    removeSelfTestData: removeSelfTestData
+    removeSelfTestData: removeSelfTestData,
+    newSaleId: newSaleId,
+    saveSale: saveSale,
+    getSale: getSale,
+    localDate: localDate
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
