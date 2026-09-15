@@ -302,6 +302,18 @@
     font-weight: 600;
   }
   .seen input { width: 28px; height: 28px; margin: 1px 0 0; flex: none; }
+  /* sale saved screen */
+  .done .big { display: block; font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .donebox {
+    padding: 18px;
+    margin: 0 0 16px;
+    border-radius: 16px;
+    background: #E3F1EB;
+    color: var(--good);
+    font-size: 18px;
+  }
+  .row[hidden] { display: none; }
+  .row .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
   .complete { font-size: 22px; min-height: 64px; margin-bottom: 0; }
 
   /* one line in the cart, with its buttons underneath */
@@ -353,6 +365,7 @@
       <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
       <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
       <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
+      <div class="row"><span>Last sale</span><span class="v" id="last-sale">–</span></div>
     </section>
 
     <button id="go-sell">Sell</button>
@@ -461,6 +474,27 @@
 
   </section>
 
+  <!-- ==================== SALE SAVED SCREEN ================= -->
+  <section id="screen-done" class="done" hidden>
+
+    <h1>Sale saved</h1>
+    <p class="lede" id="d-lede"></p>
+
+    <div class="donebox" id="d-box"></div>
+
+    <section class="panel">
+      <div class="row"><span>Total</span><span class="v" id="d-total"></span></div>
+      <div class="row"><span>Paid by</span><span class="v" id="d-method"></span></div>
+      <div class="row" id="d-received-row"><span>Cash received</span><span class="v" id="d-received"></span></div>
+      <div class="row" id="d-ref-row"><span>Bank reference</span><span class="v" id="d-ref"></span></div>
+      <div class="row"><span>Items</span><span class="v" id="d-items"></span></div>
+    </section>
+
+    <button id="d-new">New sale</button>
+    <button id="d-home" class="secondary">Home</button>
+
+  </section>
+
   <!-- =================== PRODUCTS SCREEN =================== -->
   <section id="screen-products" hidden>
 
@@ -565,7 +599,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Checkout build 3';
+      'Checkout build 4';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -574,6 +608,7 @@
     $('screen-home').hidden = (which !== 'home');
     $('screen-sell').hidden = (which !== 'sell');
     $('screen-pay').hidden = (which !== 'pay');
+    $('screen-done').hidden = (which !== 'done');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
     window.scrollTo(0, 0);
@@ -912,8 +947,112 @@
 
   $('qr-complete').addEventListener('click', function () {
     if ($('qr-complete').disabled || !$('qr-seen').checked) { return; }
-    say('pay-msg', 'good', 'QR is ready. Saving the sale comes in the next step, so nothing was saved.');
-    window.scrollTo(0, 0);
+    completeSale({ method: 'qr', reference: $('qr-ref').value });
+  });
+
+  /* ---------- saving the sale ---------- */
+
+  var saving = false;
+
+  /* Everything on the Pay screen that could change the sale is locked
+     while it saves, so nothing can change halfway. */
+  function lockPay(locked) {
+    ['pay-cash', 'pay-qr', 'pay-back', 'cash-in', 'cash-complete',
+     'qr-ref', 'qr-seen', 'qr-complete'].forEach(function (id) { $(id).disabled = locked; });
+    $('cash-quick').querySelectorAll('button').forEach(function (b) { b.disabled = locked; });
+  }
+
+  function completeSale(payment) {
+    if (saving || !paySaleId) { return; }
+    saving = true;
+    lockPay(true);
+    say('pay-msg', '', 'Saving…');
+
+    Till.saveSale(paySaleId, cart, payment).then(function (result) {
+      saving = false;
+      /* The sale is safe. Only now does the cart empty. */
+      cart = Sell.emptyCart();
+      paySaleId = null;
+      payMethod = null;
+      lockPay(false);
+      showDone(result);
+    }).catch(function (err) {
+      saving = false;
+      lockPay(false);
+      showChange();
+      showQr();
+      /* The same sale id is kept, so trying again can never save it twice. */
+      say('pay-msg', 'bad', String(err && err.message ? err.message : err) +
+        ' The cart is still here.');
+      window.scrollTo(0, 0);
+    });
+  }
+
+  /* ---------- the sale saved screen ---------- */
+
+  function timeOf(iso) {
+    var d = new Date(iso);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function showDone(result) {
+    var sale = result.sale;
+    var cash = sale.method === 'cash';
+
+    $('d-lede').textContent = 'Receipt no. ' + sale.number + ' \u00B7 ' + sale.date + ' ' + timeOf(sale.at);
+    if (cash) {
+      $('d-box').innerHTML = 'Give change:<span class="big">' + Till.formatKip(sale.changeKip) + '</span>';
+    } else {
+      $('d-box').innerHTML = 'Paid by QR:<span class="big">' + Till.formatKip(sale.totalKip) + '</span>';
+    }
+    $('d-total').textContent = Till.formatKip(sale.totalKip);
+    $('d-method').textContent = cash ? 'Cash' : 'QR';
+    $('d-received-row').hidden = !cash;
+    $('d-received').textContent = Till.formatKip(sale.receivedKip);
+    $('d-ref-row').hidden = cash || !sale.reference;
+    $('d-ref').textContent = sale.reference || '';
+    $('d-items').textContent = plural(sale.itemCount, 'item', 'items');
+
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+    show('done');
+  }
+
+  /* Straight back to an empty Sell screen. The product list read when
+     Sell was opened is still in memory, so scanning works at once. */
+  function newSale() {
+    cart = Sell.emptyCart();
+    show('sell');
+    $('s-search').value = '';
+    say('s-msg', '', '');
+    showMatches();
+    showCart();
+    $('s-search').focus();
+  }
+
+  $('d-new').addEventListener('click', newSale);
+  $('d-home').addEventListener('click', function () {
+    show('home');
+    refresh();
+  });
+
+  /* A scan on this screen starts the next sale instead of being lost.
+     Enter or Space never presses a button here. */
+  document.addEventListener('keydown', function (event) {
+    if ($('screen-done').hidden) { return; }
+    if (event.ctrlKey || event.metaKey || event.altKey) { return; }
+    if (event.key && event.key.length === 1 && event.key !== ' ') {
+      event.preventDefault();
+      newSale();
+      $('s-search').value = event.key;
+      showMatches();
+      return;
+    }
+    var el = document.activeElement;
+    var enterOrSpace = event.key === 'Enter' || event.keyCode === 13 ||
+      event.key === ' ' || event.keyCode === 32;
+    if (enterOrSpace && el && el.tagName === 'BUTTON') {
+      event.preventDefault();
+    }
   });
 
   /* ---------- cash ---------- */
@@ -987,8 +1126,9 @@
 
   $('cash-complete').addEventListener('click', function () {
     if ($('cash-complete').disabled) { return; }
-    say('pay-msg', 'good', 'Cash is ready. Saving the sale comes in a later step, so nothing was saved.');
-    window.scrollTo(0, 0);
+    var received = cashReceived();
+    if (Sell.changeDue(Sell.cartTotal(cart), received).state !== 'ok') { showChange(); return; }
+    completeSale({ method: 'cash', receivedKip: received });
   });
 
   $('s-pay').addEventListener('click', openPay);
@@ -1076,6 +1216,17 @@
         $('verdict').textContent = 'Ready to sell';
         $('lede').textContent = 'Tap Sell to start a sale.';
       }
+
+      return Till.getAll('sales');
+    }).then(function (sales) {
+      var last = null;
+      sales.forEach(function (x) {
+        if (Number.isInteger(x.number) && (!last || x.number > last.number)) { last = x; }
+      });
+      $('last-sale').textContent = last
+        ? 'No. ' + last.number + ' \u00B7 ' + Till.formatKip(last.totalKip) + ' \u00B7 ' +
+          (last.method === 'cash' ? 'Cash' : 'QR') + ' \u00B7 ' + timeOf(last.at)
+        : 'None yet';
 
       return Till.findSelfTestData();
     }).then(function (test) {
