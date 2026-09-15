@@ -213,6 +213,25 @@
   }
   .item .qty { font-weight: 700; }
 
+  /* the Pay button inside the total bar */
+  .totalbar .left { display: flex; flex-direction: column; min-width: 0; }
+  .totalbar { align-items: center; }
+  .totalbar .pay {
+    width: auto;
+    min-width: 96px;
+    margin: 0;
+    padding: 12px 20px;
+    background: #fff;
+    color: var(--brand);
+    font-size: 20px;
+  }
+  .totalbar .pay:active { background: #E6EDE9; }
+
+  /* the Pay screen */
+  .choices { display: flex; gap: 12px; margin-bottom: 12px; }
+  .choices button { margin: 0; min-height: 72px; font-size: 22px; }
+  .choices button[aria-pressed="true"] { outline: 4px solid var(--ink); outline-offset: 2px; }
+
   /* one line in the cart, with its buttons underneath */
   .cartline { padding: 13px 18px; border-top: 1px solid var(--line); }
   .cartline .top { display: flex; justify-content: space-between; gap: 14px; }
@@ -278,8 +297,11 @@
     <p class="lede" id="s-lede">Type part of a name or a barcode.</p>
 
     <div class="totalbar">
-      <span class="count" id="s-count">Cart is empty</span>
-      <span class="sum" id="s-total">0 \u20AD</span>
+      <span class="left">
+        <span class="count" id="s-count">Cart is empty</span>
+        <span class="sum" id="s-total">0 \u20AD</span>
+      </span>
+      <button type="button" class="pay" id="s-pay" hidden>Pay</button>
     </div>
     <p class="msg" id="s-msg" hidden></p>
 
@@ -303,6 +325,34 @@
 
     <button id="s-clear" class="quiet" hidden>Clear cart</button>
     <button id="s-back" class="secondary">Back</button>
+
+  </section>
+
+  <!-- ======================= PAY SCREEN ===================== -->
+  <section id="screen-pay" hidden>
+
+    <h1>Pay</h1>
+    <p class="lede">Check the items with the customer, then choose how they pay.</p>
+
+    <div class="totalbar">
+      <span class="left">
+        <span class="count" id="pay-count"></span>
+        <span class="sum" id="pay-total"></span>
+      </span>
+    </div>
+    <p class="msg" id="pay-msg" hidden></p>
+
+    <div class="choices">
+      <button type="button" id="pay-cash" aria-pressed="false">Cash</button>
+      <button type="button" id="pay-qr" aria-pressed="false">QR</button>
+    </div>
+
+    <section class="panel">
+      <h2>In this sale</h2>
+      <div id="pay-lines"></div>
+    </section>
+
+    <button id="pay-back" class="secondary">Back to cart</button>
 
   </section>
 
@@ -410,7 +460,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Sell build 5';
+      'Checkout build 1';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -418,6 +468,7 @@
   function show(which) {
     $('screen-home').hidden = (which !== 'home');
     $('screen-sell').hidden = (which !== 'sell');
+    $('screen-pay').hidden = (which !== 'pay');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
     window.scrollTo(0, 0);
@@ -506,6 +557,7 @@
     $('s-count').textContent = n === 0 ? 'Cart is empty' : plural(n, 'item', 'items');
     $('s-total').textContent = Till.formatKip(Sell.cartTotal(cart));
     $('s-clear').hidden = cart.lines.length === 0;
+    $('s-pay').hidden = cart.lines.length === 0;
 
     if (cart.lines.length === 0) {
       $('s-cart').innerHTML =
@@ -666,6 +718,79 @@
   $('s-back').addEventListener('click', function () {
     show('home');
     refresh();
+  });
+
+  /* ---------- the pay screen ---------- */
+
+  /* The id the sale will be saved under. Made once when Pay opens, so
+     pressing Complete twice can only ever save one sale. */
+  var paySaleId = null;
+  var payMethod = null;
+
+  function openPay() {
+    if (cart.lines.length === 0) {
+      say('s-msg', 'bad', 'The cart is empty.');
+      return;
+    }
+    paySaleId = Till.newSaleId();
+    payMethod = null;
+
+    $('pay-count').textContent = plural(Sell.cartCount(cart), 'item', 'items');
+    $('pay-total').textContent = Till.formatKip(Sell.cartTotal(cart));
+    say('pay-msg', '', '');
+    $('pay-cash').setAttribute('aria-pressed', 'false');
+    $('pay-qr').setAttribute('aria-pressed', 'false');
+
+    /* Oldest item first, the order they were rung up. */
+    var html = '';
+    cart.lines.slice().reverse().forEach(function (l) {
+      html +=
+        '<div class="item">' +
+          '<span class="who">' +
+            '<span class="nm"><span class="qty">' + l.qty + ' \u00D7</span> ' + esc(l.name) + '</span>' +
+            '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
+          '</span>' +
+          '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
+        '</div>';
+    });
+    $('pay-lines').innerHTML = html;
+
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+    show('pay');
+  }
+
+  function choosePay(method) {
+    payMethod = method;
+    $('pay-cash').setAttribute('aria-pressed', method === 'cash' ? 'true' : 'false');
+    $('pay-qr').setAttribute('aria-pressed', method === 'qr' ? 'true' : 'false');
+    say('pay-msg', 'good', (method === 'cash' ? 'Cash' : 'QR') +
+      ' chosen. The next part of checkout is not built yet.');
+  }
+
+  $('s-pay').addEventListener('click', openPay);
+  $('pay-cash').addEventListener('click', function () { choosePay('cash'); });
+  $('pay-qr').addEventListener('click', function () { choosePay('qr'); });
+
+  /* Back keeps the cart exactly as it was. Nothing has been saved. */
+  $('pay-back').addEventListener('click', function () {
+    paySaleId = null;
+    payMethod = null;
+    show('sell');
+    say('s-msg', '', '');
+    showCart();
+    $('s-search').focus();
+  });
+
+  /* On the Pay screen a scanner's Enter must never press a button by
+     accident. Buttons here only work by tapping. */
+  document.addEventListener('keydown', function (event) {
+    if ($('screen-pay').hidden) { return; }
+    var el = document.activeElement;
+    var enterOrSpace = event.key === 'Enter' || event.keyCode === 13 ||
+      event.key === ' ' || event.keyCode === 32;
+    if (enterOrSpace && el && el.tagName === 'BUTTON') {
+      event.preventDefault();
+    }
   });
 
   /* ---------- the products screen ---------- */
