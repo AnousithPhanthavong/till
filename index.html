@@ -264,16 +264,10 @@
       <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
     </section>
 
-    <section class="panel" id="last-panel" hidden>
-      <h2>Most recent sale</h2>
-      <div class="sale" id="last-sale"></div>
-    </section>
-
     <button id="go-sell">Sell</button>
     <button id="go-products" class="secondary">Products</button>
 
-    <button id="add">Save a test sale</button>
-    <button id="clear" class="quiet">Delete all test data</button>
+    <button id="cleanup" class="quiet" hidden>Remove test data</button>
 
   </section>
 
@@ -401,7 +395,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.saveProduct === 'function';
+    return typeof Till !== 'undefined' && typeof Till.removeSelfTestData === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.findByBarcode === 'function';
@@ -416,7 +410,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Sell build 4';
+      'Sell build 5';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -717,31 +711,6 @@
 
   /* ---------- the home screen ---------- */
 
-  function showLastSale(data) {
-    if (!data) {
-      $('last-panel').hidden = true;
-      return;
-    }
-    $('last-panel').hidden = false;
-
-    var sale = data.sale;
-    var html = '';
-
-    data.lines.forEach(function (line) {
-      html += '<p>' + line.qty + ' \u00D7 ' + esc(line.name) +
-        ' at ' + Till.formatKip(line.unitPriceKip) +
-        ' = ' + Till.formatKip(line.lineTotalKip) + '</p>' +
-        '<p class="fefo">from batch ' + esc(line.batchCode) +
-        ', expires ' + esc(line.expiry || 'no expiry') + '</p>';
-    });
-
-    html += '<p class="total">Total ' + Till.formatKip(sale.totalKip) + '</p>';
-    html += '<p class="fefo">Cash ' + Till.formatKip(sale.cashGivenKip) +
-      ', change ' + Till.formatKip(sale.changeKip) + '</p>';
-
-    $('last-sale').innerHTML = html;
-  }
-
   function refresh() {
     return Till.counts().then(function (c) {
       ['products', 'batches', 'sales', 'saleLines'].forEach(function (key) {
@@ -750,23 +719,26 @@
         el.setAttribute('data-zero', c[key] === 0 ? 'yes' : 'no');
       });
 
-      if (c.sales > 0) {
-        $('verdict').setAttribute('data-state', 'good');
-        $('verdict').textContent = plural(c.sales, 'sale saved', 'sales saved');
-        $('lede').textContent = 'Close the app completely and open it again. These numbers should not change.';
+      $('verdict').removeAttribute('data-state');
+      if (c.products === 0) {
+        $('verdict').textContent = 'Add your products first';
+        $('lede').textContent = 'Tap Products, then Add product.';
       } else {
-        $('verdict').removeAttribute('data-state');
-        $('verdict').textContent = 'Nothing saved yet';
-        $('lede').textContent = 'Tap the button below to write one test sale into the till.';
+        $('verdict').textContent = 'Ready to sell';
+        $('lede').textContent = 'Tap Sell to start a sale.';
       }
 
-      return Till.lastSaleSummary();
-    }).then(showLastSale)
-      .catch(function (err) {
-        $('verdict').setAttribute('data-state', 'bad');
-        $('verdict').textContent = 'The till cannot save data';
-        $('lede').textContent = String(err && err.message ? err.message : err);
-      });
+      return Till.findSelfTestData();
+    }).then(function (test) {
+      $('cleanup').hidden = test.total === 0;
+      $('cleanup').textContent = test.saleIds.length
+        ? 'Remove test data (' + plural(test.saleIds.length, 'test sale', 'test sales') + ')'
+        : 'Remove test data';
+    }).catch(function (err) {
+      $('verdict').setAttribute('data-state', 'bad');
+      $('verdict').textContent = 'The till cannot read its data';
+      $('lede').textContent = String(err && err.message ? err.message : err);
+    });
   }
 
   /* ---------- buttons ---------- */
@@ -848,24 +820,26 @@
     refresh();
   });
 
-  $('add').addEventListener('click', function () {
-    $('add').disabled = true;
-    Till.selfTest()
-      .then(refresh)
+  /* Removes only what the old "Save a test sale" button made.
+     Real products are left alone. */
+  $('cleanup').addEventListener('click', function () {
+    if (!window.confirm('Remove the test product "Test formula 800g" and its test sales? Your own products are not touched.')) { return; }
+    $('cleanup').disabled = true;
+    Till.removeSelfTestData()
+      .then(function (removed) {
+        return refresh().then(function () {
+          $('verdict').setAttribute('data-state', 'good');
+          $('verdict').textContent = 'Test data removed';
+          $('lede').textContent = plural(removed.saleIds.length, 'test sale', 'test sales') +
+            ' and the test product are gone. Your own products are still here.';
+        });
+      })
       .catch(function (err) {
         $('verdict').setAttribute('data-state', 'bad');
-        $('verdict').textContent = 'That sale did not save';
+        $('verdict').textContent = 'Test data was not removed';
         $('lede').textContent = String(err && err.message ? err.message : err);
       })
-      .then(function () { $('add').disabled = false; });
-  });
-
-  $('clear').addEventListener('click', function () {
-    if (!window.confirm('Delete every product, batch and sale saved on this device?')) { return; }
-    $('clear').disabled = true;
-    Till.wipe()
-      .then(refresh)
-      .then(function () { $('clear').disabled = false; });
+      .then(function () { $('cleanup').disabled = false; });
   });
 
   if ('serviceWorker' in navigator) {
@@ -887,7 +861,7 @@
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';
     $('go-sell').disabled = true;
     $('go-products').disabled = true;
-    $('add').disabled = true;
+    $('cleanup').hidden = true;
   }
 </script>
 </body>

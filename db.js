@@ -289,112 +289,84 @@
     });
   }
 
-  /* ---------- temporary self-test ----------
-     Writes one product, two batches with different expiry dates, and one
-     sale of 3 units. The sale must take the 2 units from the batch that
-     expires first, then 1 from the later batch.
+  /* ---------- removing the old test data ----------
+     Early versions had a "Save a test sale" button. It made a product called
+     "Test formula 800g" (barcode 8850000000001), two batches and test sales.
+     This finds exactly those records and nothing else, so it stays safe
+     even after real sales exist. */
 
-     This is throwaway proof that the tables work. The real selling screen
-     is built in a later step, and this whole section gets deleted then. */
-
-  function selfTest() {
-    var now = new Date().toISOString();
-
-    var product = {
-      id: newId('prod'),
-      barcode: '8850000000001',
-      name: 'Test formula 800g',
-      costKip: 145000,
-      priceKip: 185000,
-      tracksExpiry: true,
-      active: true,
-      createdAt: now
-    };
-
-    var batchEarly = {
-      id: newId('batch'),
-      productId: product.id,
-      batchCode: 'LOT-A',
-      expiry: '2026-12-31',
-      qtyRemaining: 2,
-      costKip: 145000,
-      receivedAt: now
-    };
-
-    var batchLate = {
-      id: newId('batch'),
-      productId: product.id,
-      batchCode: 'LOT-B',
-      expiry: '2027-06-30',
-      qtyRemaining: 10,
-      costKip: 148000,
-      receivedAt: now
-    };
-
-    return put('products', product)
-      .then(function () { return putMany('batches', [batchEarly, batchLate]); })
-      .then(function () { return batchesForProduct(product.id); })
-      .then(function (available) {
-        var wanted = 3;
-        var lines = [];
-        var touched = [];
-        var saleId = newId('sale');
-
-        available.forEach(function (batch) {
-          if (wanted <= 0) { return; }
-          var take = Math.min(wanted, batch.qtyRemaining);
-          wanted -= take;
-          batch.qtyRemaining -= take;
-          touched.push(batch);
-          lines.push({
-            id: newId('line'),
-            saleId: saleId,
-            productId: product.id,
-            batchId: batch.id,
-            name: product.name,
-            batchCode: batch.batchCode,
-            expiry: batch.expiry,
-            qty: take,
-            unitPriceKip: product.priceKip,
-            lineTotalKip: take * product.priceKip
-          });
-        });
-
-        if (wanted > 0) {
-          return Promise.reject(new Error('Not enough stock in the test batches'));
-        }
-
-        var total = lines.reduce(function (sum, l) { return sum + l.lineTotalKip; }, 0);
-        var cashGiven = 600000;
-
-        var sale = {
-          id: saleId,
-          at: now,
-          day: today(),
-          totalKip: total,
-          payment: 'cash',
-          cashGivenKip: cashGiven,
-          changeKip: cashGiven - total,
-          voidOf: null,
-          refundOf: null
-        };
-
-        return putMany('batches', touched)
-          .then(function () { return putMany('saleLines', lines); })
-          .then(function () { return put('sales', sale); })
-          .then(function () { return { sale: sale, lines: lines, batches: touched }; });
-      });
+  function isSelfTestProduct(p) {
+    return !!p && p.name === 'Test formula 800g' && p.barcode === '8850000000001';
   }
 
-  /* Plain-language summary of the most recent sale, for the screen. */
-  function lastSaleSummary() {
-    return getAll('sales').then(function (sales) {
-      if (!sales.length) { return null; }
-      sales.sort(function (a, b) { return a.at < b.at ? 1 : -1; });
-      var sale = sales[0];
-      return byIndex('saleLines', 'saleId', sale.id).then(function (lines) {
-        return getAll('batches').then(function (batches) {
-          return { sale: sale, lines: lines, batches: batches };
+  function findSelfTestData() {
+    return Promise.all([
+      getAll('products'), getAll('batches'), getAll('sales'), getAll('saleLines')
+    ]).then(function (all) {
+      var productIds = {};
+      all[0].forEach(function (p) { if (isSelfTestProduct(p)) { productIds[p.id] = true; } });
+
+      var batchIds = all[1]
+        .filter(function (b) { return productIds[b.productId]; })
+        .map(function (b) { return b.id; });
+
+      var linesBySale = {};
+      all[3].forEach(function (l) {
+        (linesBySale[l.saleId] = linesBySale[l.saleId] || []).push(l);
+      });
+
+      /* A sale is removed only if every one of its lines is test stock. */
+      var saleIds = all[2]
+        .filter(function (sale) {
+          var lines = linesBySale[sale.id] || [];
+          return lines.length > 0 && lines.every(function (l) { return productIds[l.productId]; });
+        })
+        .map(function (sale) { return sale.id; });
+
+      /* Lines go only with their whole sale, or if their sale is already gone.
+         A sale is never left half deleted. */
+      var removedSale = {};
+      saleIds.forEach(function (id) { removedSale[id] = true; });
+      var saleExists = {};
+      all[2].forEach(function (sale) { saleExists[sale.id] = true; });
+      var testLineIds = all[3]
+        .filter(function (l) {
+          return productIds[l.productId] && (removedSale[l.saleId] || !saleExists[l.saleId]);
+        })
+        .map(function (l) { return l.id; });
+
+      return {
+        productIds: Object.keys(productIds),
+        batchIds: batchIds,
+        saleIds: saleIds,
+        lineIds: testLineIds,
+        total: Object.keys(productIds).length + batchIds.length + saleIds.length + testLineIds.length
+      };
+    });
+  }
+
+  function removeSelfTestData() {
+    return findSelfTestData().then(function (found) {
+      if (found.total === 0) { return found; }
+      return open().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var names = ['products', 'batches', 'sales', 'saleLines'];
+          var t = db.transaction(names, 'readwrite');
+          found.productIds.forEach(function (id) { t.objectStore('products').delete(id); });
+          found.batchIds.forEach(function (id) { t.objectStore('batches').delete(id); });
+          found.saleIds.forEach(function (id) { t.objectStore('sales').delete(id); });
+          found.lineIds.forEach(function (id) { t.objectStore('saleLines').delete(id); });
+          t.oncomplete = function () { resolve(found); };
+          t.onerror = function () { reject(t.error); };
+          t.onabort = function () { reject(t.error || new Error('Removing was cancelled')); };
+        });
+      }).then(function (removed) {
+        /* Prove it: look again, and complain if anything is left. */
+        return findSelfTestData().then(function (left) {
+          if (left.total !== 0) {
+            return Promise.reject(new Error('Some test data is still there. Close the app and try again.'));
+          }
+          return removed;
         });
       });
     });
@@ -418,8 +390,8 @@
     newId: newId,
     formatKip: formatKip,
     today: today,
-    selfTest: selfTest,
-    lastSaleSummary: lastSaleSummary
+    findSelfTestData: findSelfTestData,
+    removeSelfTestData: removeSelfTestData
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
