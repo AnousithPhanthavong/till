@@ -94,9 +94,23 @@
   }
   .panel h2 + .item { border-top: 0; }
   .item .who { min-width: 0; }
-  .item .nm { font-weight: 600; }
-  .item .sub { font-size: 14px; color: var(--muted); }
+  .item .nm { display: block; font-weight: 600; }
+  .item .sub { display: block; font-size: 14px; color: var(--muted); }
   .item .price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* a row you can tap to edit */
+  button.item {
+    background: var(--card);
+    color: var(--ink);
+    font-weight: 400;
+    text-align: left;
+    border-radius: 0;
+    min-height: 0;
+    margin: 0;
+    width: 100%;
+  }
+  button.item:active { background: #EDF2EE; }
+  button.item .chev { color: var(--muted); font-weight: 400; margin-left: 2px; }
 
   .empty { padding: 16px 18px 20px; color: var(--muted); font-size: 16px; }
   .note { font-size: 15px; color: var(--muted); margin: -4px 0 20px; }
@@ -300,7 +314,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Catalog build 2';
+      'Catalog build 3';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -330,7 +344,7 @@
     return Till.listProducts().then(function (rows) {
       $('p-count').textContent = rows.length === 0
         ? 'Nothing saved yet.'
-        : plural(rows.length, 'product saved.', 'products saved.');
+        : plural(rows.length, 'product saved. Tap one to change it.', 'products saved. Tap one to change it.');
 
       if (rows.length === 0) {
         $('product-list').innerHTML =
@@ -344,13 +358,14 @@
         if (p.tracksExpiry) { sub += ' · has expiry dates'; }
 
         html +=
-          '<div class="item">' +
-            '<div class="who">' +
-              '<div class="nm">' + esc(p.name) + '</div>' +
-              '<div class="sub">' + sub + '</div>' +
-            '</div>' +
-            '<div class="price">' + Till.formatKip(p.priceKip || 0) + '</div>' +
-          '</div>';
+          '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
+            '<span class="who">' +
+              '<span class="nm">' + esc(p.name) + '</span>' +
+              '<span class="sub">' + sub + '</span>' +
+            '</span>' +
+            '<span class="price">' + Till.formatKip(p.priceKip || 0) +
+              ' <span class="chev">\u203A</span></span>' +
+          '</button>';
       });
       $('product-list').innerHTML = html;
 
@@ -423,19 +438,40 @@
     loadProducts();
   });
 
-  function openForm() {
-    $('f-name').value = '';
-    $('f-barcode').value = '';
-    $('f-price').value = '';
-    $('f-cost').value = '';
-    $('f-expiry').checked = false;
+  var editingId = null;
+
+  function openForm(product) {
+    editingId = product ? product.id : null;
+
+    $('f-title').textContent = product ? 'Edit product' : 'Add product';
+    $('f-name').value = product ? (product.name || '') : '';
+    $('f-barcode').value = product ? (product.barcode || '') : '';
+    $('f-price').value = product ? String(product.priceKip || '') : '';
+    $('f-cost').value = (product && product.costKip) ? String(product.costKip) : '';
+    $('f-expiry').checked = product ? !!product.tracksExpiry : false;
+
     say('f-msg', '', '');
     $('f-save').disabled = false;
     show('form');
-    $('f-name').focus();
+    if (!product) { $('f-name').focus(); }
   }
 
-  $('go-add').addEventListener('click', openForm);
+  $('go-add').addEventListener('click', function () { openForm(null); });
+
+  /* Tapping any row in the list opens that product for editing. */
+  $('product-list').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    var id = row.getAttribute('data-id');
+
+    Till.get('products', id).then(function (product) {
+      if (!product) {
+        say('p-msg', 'bad', 'That product is no longer saved.');
+        return loadProducts();
+      }
+      openForm(product);
+    });
+  });
 
   $('f-cancel').addEventListener('click', function () {
     say('p-msg', '', '');
@@ -443,10 +479,13 @@
   });
 
   $('f-save').addEventListener('click', function () {
+    var wasEditing = !!editingId;
+
     say('f-msg', '', '');
     $('f-save').disabled = true;
 
     Till.saveProduct({
+      id: editingId,
       name: $('f-name').value,
       barcode: $('f-barcode').value,
       priceKip: $('f-price').value,
@@ -454,7 +493,8 @@
       tracksExpiry: $('f-expiry').checked
     }).then(function (saved) {
       say('p-msg', 'good',
-        'Saved: ' + saved.name + ' at ' + Till.formatKip(saved.priceKip));
+        (wasEditing ? 'Updated: ' : 'Saved: ') +
+        saved.name + ' at ' + Till.formatKip(saved.priceKip));
       show('products');
       return loadProducts();
     }).catch(function (err) {
