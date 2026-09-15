@@ -285,6 +285,12 @@
       .replace(/>/g, '&gt;');
   }
 
+  /* index.html and db.js have to be the same version. If the device kept an
+     old db.js, say so instead of quietly doing nothing. */
+  function dbIsCurrent() {
+    return typeof Till !== 'undefined' && typeof Till.saveProduct === 'function';
+  }
+
   function showStatus() {
     var home = window.navigator.standalone === true ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -492,7 +498,16 @@
 
   showStatus();
   show('home');
-  refresh();
+
+  if (dbIsCurrent()) {
+    refresh();
+  } else {
+    $('verdict').setAttribute('data-state', 'bad');
+    $('verdict').textContent = 'The app is only half updated';
+    $('lede').textContent = 'This device still has an old copy of db.js. With the internet on, close the app completely and open it again. If it still says this, db.js did not upload.';
+    $('go-products').disabled = true;
+    $('add').disabled = true;
+  }
 </script>
 </body>
 </html>
