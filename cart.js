@@ -6,6 +6,7 @@
    Step 2: the cart and its total.
    Step 3: changing quantities and removing lines.
    Step 4: recognising a scanned barcode.
+   Step 5: working out change for cash payments.
 
    A cart is { lines: [...] }. Each line is
    { productId, name, barcode, unitPriceKip, qty }.
@@ -220,7 +221,60 @@
     return n;
   }
 
+  /* ---------- paying cash ---------- */
+
+  /* No single sale in this shop comes near this. A bigger amount is almost
+     certainly a mistake, like a barcode scanned into the cash box. */
+  var MAX_CASH = 100000000;
+
+  /* Works out the change. received is whole kip, or null if nothing typed.
+     Returns one of:
+       { state: 'empty' }                       nothing entered yet
+       { state: 'short', shortKip }             not enough money
+       { state: 'tooLarge' }                    amount cannot be right
+       { state: 'ok', changeKip, bigChange }    ready to complete */
+  function changeDue(totalKip, receivedKip) {
+    if (!isWholeKip(totalKip)) {
+      throw new Error('The total is not right. Go back to the cart.');
+    }
+    if (receivedKip === null || receivedKip === undefined || receivedKip === 0) {
+      return { state: 'empty' };
+    }
+    if (!Number.isSafeInteger(receivedKip) || receivedKip < 0) {
+      return { state: 'tooLarge' };
+    }
+    if (receivedKip > MAX_CASH) {
+      return { state: 'tooLarge' };
+    }
+    if (receivedKip < totalKip) {
+      return { state: 'short', shortKip: totalKip - receivedKip };
+    }
+    var change = receivedKip - totalKip;
+    return { state: 'ok', changeKip: change, bigChange: change > 500000 };
+  }
+
+  function roundUpTo(amount, step) {
+    return Math.ceil(amount / step) * step;
+  }
+
+  /* Amounts a customer is likely to hand over, smallest first.
+     The first one is always the exact total. The rest are the total
+     rounded up to the next 5,000, 10,000, 20,000, 50,000 and 100,000. */
+  function cashSuggestions(totalKip) {
+    if (!isWholeKip(totalKip)) { return []; }
+    var list = [totalKip];
+    [5000, 10000, 20000, 50000, 100000].forEach(function (step) {
+      var v = roundUpTo(totalKip, step);
+      if (v <= MAX_CASH && list.indexOf(v) === -1) { list.push(v); }
+    });
+    list.sort(function (a, b) { return a - b; });
+    return list.slice(0, 5);
+  }
+
   global.Sell = {
+    MAX_CASH: MAX_CASH,
+    changeDue: changeDue,
+    cashSuggestions: cashSuggestions,
     MAX_RESULTS: MAX_RESULTS,
     cleanScan: cleanScan,
     hasLaoLetters: hasLaoLetters,

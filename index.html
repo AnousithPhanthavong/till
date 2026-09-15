@@ -232,6 +232,48 @@
   .choices button { margin: 0; min-height: 72px; font-size: 22px; }
   .choices button[aria-pressed="true"] { outline: 4px solid var(--ink); outline-offset: 2px; }
 
+  /* paying cash */
+  .cashbox { padding: 4px 18px 18px; }
+  .cashbox label { display: block; font-size: 15px; color: var(--muted); margin: 10px 0 6px; }
+  .cashbox input {
+    font: inherit;
+    font-size: 28px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+    min-height: 60px;
+    padding: 8px 14px;
+    color: var(--ink);
+    background: #fff;
+    border: 2px solid var(--brand);
+    border-radius: 12px;
+    -webkit-appearance: none;
+  }
+  .cashbox input:focus { outline: 3px solid var(--brand); outline-offset: 1px; }
+  .change {
+    margin: 14px 0 4px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--bg);
+    font-size: 18px;
+    color: var(--muted);
+  }
+  .change .big { display: block; font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .change[data-state="ok"] { background: #E3F1EB; color: var(--good); }
+  .change[data-state="short"], .change[data-state="tooLarge"] { background: #F6EAE8; color: var(--bad); }
+  .change .warn { display: block; font-size: 15px; font-weight: 600; color: var(--warn); margin-top: 4px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 16px; }
+  .quick button {
+    width: auto;
+    flex: 1 1 30%;
+    margin: 0;
+    padding: 10px 8px;
+    min-height: 52px;
+    font-variant-numeric: tabular-nums;
+  }
+  .quick .tag { display: block; font-size: 13px; font-weight: 600; line-height: 1.1; }
+  .complete { font-size: 22px; min-height: 64px; margin-bottom: 0; }
+
   /* one line in the cart, with its buttons underneath */
   .cartline { padding: 13px 18px; border-top: 1px solid var(--line); }
   .cartline .top { display: flex; justify-content: space-between; gap: 14px; }
@@ -347,6 +389,18 @@
       <button type="button" id="pay-qr" aria-pressed="false">QR</button>
     </div>
 
+    <section class="panel" id="cash-panel" hidden>
+      <h2>Cash</h2>
+      <div class="cashbox">
+        <label for="cash-in">Cash received from the customer</label>
+        <input id="cash-in" type="text" inputmode="numeric" autocomplete="off"
+          autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <div class="change" id="cash-change" data-state="empty">Enter the cash received, or tap an amount below.</div>
+        <div class="quick" id="cash-quick"></div>
+        <button type="button" class="complete" id="cash-complete" disabled>Complete sale</button>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>In this sale</h2>
       <div id="pay-lines"></div>
@@ -448,7 +502,7 @@
     return typeof Till !== 'undefined' && typeof Till.saveSale === 'function';
   }
   function cartIsCurrent() {
-    return typeof Sell !== 'undefined' && typeof Sell.findByBarcode === 'function';
+    return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
   }
 
   function showStatus() {
@@ -460,7 +514,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Checkout build 1';
+      'Checkout build 2';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -754,6 +808,7 @@
         '</div>';
     });
     $('pay-lines').innerHTML = html;
+    resetCash();
 
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('pay');
@@ -763,9 +818,91 @@
     payMethod = method;
     $('pay-cash').setAttribute('aria-pressed', method === 'cash' ? 'true' : 'false');
     $('pay-qr').setAttribute('aria-pressed', method === 'qr' ? 'true' : 'false');
-    say('pay-msg', 'good', (method === 'cash' ? 'Cash' : 'QR') +
-      ' chosen. The next part of checkout is not built yet.');
+    $('cash-panel').hidden = method !== 'cash';
+
+    if (method === 'cash') {
+      say('pay-msg', '', '');
+      showChange();
+      $('cash-in').focus();
+    } else {
+      say('pay-msg', 'good', 'QR chosen. The QR part of checkout is not built yet.');
+    }
   }
+
+  /* ---------- cash ---------- */
+
+  function resetCash() {
+    $('cash-panel').hidden = true;
+    $('cash-in').value = '';
+
+    var total = Sell.cartTotal(cart);
+    var html = '';
+    Sell.cashSuggestions(total).forEach(function (amount, i) {
+      html += '<button type="button" class="secondary" data-amount="' + amount + '">' +
+        (i === 0 ? '<span class="tag">Exact</span>' : '') + Till.formatKip(amount) + '</button>';
+    });
+    $('cash-quick').innerHTML = html;
+    showChange();
+  }
+
+  /* The amount in the cash box, as whole kip, or null if empty. */
+  function cashReceived() {
+    return Till.toKip($('cash-in').value);
+  }
+
+  /* Shows the change (or what is missing) and turns Complete on or off. */
+  function showChange() {
+    var total = Sell.cartTotal(cart);
+    var result = Sell.changeDue(total, cashReceived());
+    var box = $('cash-change');
+    box.setAttribute('data-state', result.state);
+
+    if (result.state === 'empty') {
+      box.textContent = 'Enter the cash received, or tap an amount below.';
+    } else if (result.state === 'short') {
+      box.innerHTML = 'Not enough yet. Still short:' +
+        '<span class="big">' + Till.formatKip(result.shortKip) + '</span>';
+    } else if (result.state === 'tooLarge') {
+      box.textContent = 'That amount cannot be right. Check it and type it again.';
+    } else {
+      box.innerHTML = 'Give change:' +
+        '<span class="big">' + Till.formatKip(result.changeKip) + '</span>' +
+        (result.bigChange ? '<span class="warn">That is a lot of change. Check the amount received.</span>' : '');
+    }
+
+    $('cash-complete').disabled = result.state !== 'ok';
+  }
+
+  /* Adds thousands separators as the amount is typed: 500000 shows as 500,000. */
+  $('cash-in').addEventListener('input', function () {
+    var kip = cashReceived();
+    var shown = kip === null ? '' : kip.toLocaleString('en-US');
+    if ($('cash-in').value !== shown) { $('cash-in').value = shown; }
+    showChange();
+  });
+
+  /* Enter or Done on the keyboard just closes the keyboard. It never completes the sale. */
+  $('cash-in').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      $('cash-in').blur();
+    }
+  });
+
+  $('cash-quick').addEventListener('click', function (event) {
+    var btn = event.target.closest ? event.target.closest('button[data-amount]') : null;
+    if (!btn) { return; }
+    var amount = parseInt(btn.getAttribute('data-amount'), 10);
+    $('cash-in').value = amount.toLocaleString('en-US');
+    $('cash-in').blur();
+    showChange();
+  });
+
+  $('cash-complete').addEventListener('click', function () {
+    if ($('cash-complete').disabled) { return; }
+    say('pay-msg', 'good', 'Cash is ready. Saving the sale comes in a later step, so nothing was saved.');
+    window.scrollTo(0, 0);
+  });
 
   $('s-pay').addEventListener('click', openPay);
   $('pay-cash').addEventListener('click', function () { choosePay('cash'); });
