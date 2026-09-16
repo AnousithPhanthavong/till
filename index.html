@@ -368,6 +368,45 @@
   .rc-strong { font-size: 19px; font-weight: 700; margin: 2px 0 4px; }
   .rc-thanks { text-align: center; font-size: 17px; margin-top: 4px; }
 
+  /* ---------- printing: only the receipt, on 80mm paper ----------
+     An 80mm roll prints about 72mm wide, so the receipt is 72mm with a
+     little space either side. Everything is solid black for a thermal
+     printer, which cannot print grey. */
+  /* The same printed sizes, used for a moment to measure the receipt. */
+  body.measuring .rc {
+    width: 72mm; max-width: none; padding: 3mm 0 6mm; border: 0;
+    font-size: 10pt; line-height: 1.35;
+  }
+  body.measuring .rc-shop { font-size: 14pt; }
+  body.measuring .rc-strong { font-size: 13pt; }
+  body.measuring .rc-thanks { font-size: 11pt; }
+
+  @media print {
+    @page { margin: 0; }
+    html, body { background: #fff !important; }
+    body { padding: 0 !important; margin: 0 !important; }
+    main { max-width: none; margin: 0; }
+    main > *:not(#screen-receipt) { display: none !important; }
+    #screen-receipt > *:not(#r-paper) { display: none !important; }
+    #screen-receipt { display: block !important; }
+    .rc {
+      width: 72mm;
+      max-width: none;
+      margin: 0 4mm;
+      padding: 3mm 0 6mm;
+      border: 0;
+      border-radius: 0;
+      color: #000;
+      font-size: 10pt;
+      line-height: 1.35;
+    }
+    .rc * { color: #000 !important; }
+    .rc-shop { font-size: 14pt; }
+    .rc-strong { font-size: 13pt; }
+    .rc-thanks { font-size: 11pt; }
+    .rc-rule { border-top: 1px dashed #000; }
+  }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -533,7 +572,8 @@
 
     <div class="rc" id="r-paper"></div>
 
-    <button id="r-new">New sale</button>
+    <button id="r-print" disabled>Print</button>
+    <button id="r-new" class="secondary">New sale</button>
     <button id="r-back" class="secondary">Back</button>
 
   </section>
@@ -680,7 +720,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Receipt build 5b';
+      'Receipt build 5c';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -1130,6 +1170,7 @@
     say('r-msg', '', '');
     $('r-paper').innerHTML = '';
     $('r-paper').hidden = true;
+    $('r-print').disabled = true;
     $('r-lede').textContent = 'Reading the saved sale…';
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('receipt');
@@ -1140,7 +1181,8 @@
       var r = Receipt.build(found.sale, found.lines, got[1]);
       $('r-paper').innerHTML = Receipt.toHtml(r);
       $('r-paper').hidden = false;
-      $('r-lede').textContent = 'Show this to the customer.';
+      $('r-print').disabled = false;
+      $('r-lede').textContent = 'Show this to the customer, or tap Print.';
     }).catch(function (err) {
       $('r-lede').textContent = '';
       say('r-msg', 'bad', String(err && err.message ? err.message : err));
@@ -1150,6 +1192,33 @@
   $('d-receipt').addEventListener('click', function () {
     if (doneSaleId) { openReceipt(doneSaleId); }
   });
+  /* Sets the paper length to the length of this receipt, so the printer
+     does not feed out a long blank strip after it. */
+  function sizePageToReceipt() {
+    var old = $('print-size');
+    if (old) { old.parentNode.removeChild(old); }
+    var mm = Math.ceil($('r-paper').scrollHeight * 25.4 / 96) + 10;
+    if (mm < 60) { mm = 60; }
+    var style = document.createElement('style');
+    style.id = 'print-size';
+    style.textContent = '@media print { @page { size: 80mm ' + mm + 'mm; margin: 0; } }';
+    document.head.appendChild(style);
+  }
+
+  $('r-print').addEventListener('click', function () {
+    if ($('r-print').disabled || $('r-paper').hidden) { return; }
+    say('r-msg', '', '');
+    /* Measure with the printed widths, then open the print window. */
+    document.body.classList.add('measuring');
+    sizePageToReceipt();
+    document.body.classList.remove('measuring');
+    try {
+      window.print();
+    } catch (err) {
+      say('r-msg', 'bad', 'Printing could not start on this device.');
+    }
+  });
+
   $('r-new').addEventListener('click', newSale);
   $('r-back').addEventListener('click', function () {
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
