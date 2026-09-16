@@ -357,6 +357,7 @@
     font-variant-numeric: tabular-nums;
   }
   .rc-shop { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 8px; overflow-wrap: anywhere; }
+  .rc-phone { text-align: center; margin: -6px 0 8px; }
   .rc-pair { display: flex; justify-content: space-between; gap: 10px; }
   .rc-pair span:last-child { text-align: right; white-space: nowrap; }
   .rc-when { margin-bottom: 2px; }
@@ -396,6 +397,7 @@
 
     <button id="go-sell">Sell</button>
     <button id="go-products" class="secondary">Products</button>
+    <button id="go-shop" class="secondary">Shop details</button>
 
     <button id="cleanup" class="quiet" hidden>Remove test data</button>
 
@@ -603,6 +605,40 @@
 
   </section>
 
+  <!-- ===================== SHOP DETAILS ===================== -->
+  <section id="screen-shop" hidden>
+
+    <h1>Shop details</h1>
+    <p class="lede">These print at the top and bottom of every receipt.</p>
+    <p class="msg" id="sh-msg" hidden></p>
+
+    <section class="panel">
+      <h2>On the receipt</h2>
+
+      <div class="field">
+        <label for="sh-name">Shop name</label>
+        <input id="sh-name" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
+        <p class="hint">Printed large at the top. Lao or English.</p>
+      </div>
+
+      <div class="field">
+        <label for="sh-phone">Phone (optional)</label>
+        <input id="sh-phone" type="text" maxlength="30" inputmode="tel" autocomplete="off">
+        <p class="hint">Printed under the shop name. Leave empty to leave it off.</p>
+      </div>
+
+      <div class="field">
+        <label for="sh-thanks">Bottom line (optional)</label>
+        <input id="sh-thanks" type="text" maxlength="60" autocomplete="off">
+        <p class="hint">Leave empty to print ຂອບໃຈ (thank you).</p>
+      </div>
+    </section>
+
+    <button id="sh-save">Save</button>
+    <button id="sh-cancel" class="secondary">Cancel</button>
+
+  </section>
+
   <footer id="status">Checking the app…</footer>
 </main>
 
@@ -626,13 +662,13 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.saveSale === 'function';
+    return typeof Till !== 'undefined' && typeof Till.saveShop === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
   }
   function receiptIsCurrent() {
-    return typeof Receipt !== 'undefined' && typeof Receipt.build === 'function';
+    return typeof Receipt !== 'undefined' && typeof Receipt.shopLines === 'function';
   }
 
   function showStatus() {
@@ -644,7 +680,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Receipt build 5a';
+      'Receipt build 5b';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -655,6 +691,7 @@
     $('screen-pay').hidden = (which !== 'pay');
     $('screen-done').hidden = (which !== 'done');
     $('screen-receipt').hidden = (which !== 'receipt');
+    $('screen-shop').hidden = (which !== 'shop');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
     window.scrollTo(0, 0);
@@ -1097,9 +1134,10 @@
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('receipt');
 
-    Till.getSale(saleId).then(function (found) {
+    Promise.all([Till.getSale(saleId), Till.getShop()]).then(function (got) {
+      var found = got[0];
       if (!found) { throw new Error('This sale could not be found.'); }
-      var r = Receipt.build(found.sale, found.lines, null);
+      var r = Receipt.build(found.sale, found.lines, got[1]);
       $('r-paper').innerHTML = Receipt.toHtml(r);
       $('r-paper').hidden = false;
       $('r-lede').textContent = 'Show this to the customer.';
@@ -1403,6 +1441,59 @@
     refresh();
   });
 
+  /* ---------- shop details ---------- */
+
+  $('go-shop').addEventListener('click', function () {
+    say('sh-msg', '', '');
+    $('sh-save').disabled = true;
+    show('shop');
+    Till.getShop().then(function (shop) {
+      $('sh-name').value = shop.name;
+      $('sh-phone').value = shop.phone;
+      $('sh-thanks').value = shop.thanks;
+      $('sh-save').disabled = false;
+    }).catch(function (err) {
+      say('sh-msg', 'bad', 'Could not read the shop details: ' +
+        String(err && err.message ? err.message : err));
+    });
+  });
+
+  $('sh-save').addEventListener('click', function () {
+    say('sh-msg', '', '');
+    $('sh-save').disabled = true;
+    Till.saveShop({
+      name: $('sh-name').value,
+      phone: $('sh-phone').value,
+      thanks: $('sh-thanks').value
+    }).then(function (saved) {
+      show('home');
+      return refresh().then(function () {
+        $('verdict').setAttribute('data-state', 'good');
+        $('verdict').textContent = 'Shop details saved';
+        $('lede').textContent = 'Receipts now show: ' + saved.name;
+      });
+    }).catch(function (err) {
+      say('sh-msg', 'bad', String(err && err.message ? err.message : err));
+    }).then(function () {
+      $('sh-save').disabled = false;
+    });
+  });
+
+  $('sh-cancel').addEventListener('click', function () {
+    show('home');
+    refresh();
+  });
+
+  /* Enter in a shop details box just closes the keyboard. */
+  ['sh-name', 'sh-phone', 'sh-thanks'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.keyCode === 13) {
+        event.preventDefault();
+        $(id).blur();
+      }
+    });
+  });
+
   /* Removes only what the old "Save a test sale" button made.
      Real products are left alone. */
   $('cleanup').addEventListener('click', function () {
@@ -1444,6 +1535,7 @@
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';
     $('go-sell').disabled = true;
     $('go-products').disabled = true;
+    $('go-shop').disabled = true;
     $('cleanup').hidden = true;
   }
 </script>

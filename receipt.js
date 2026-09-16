@@ -97,17 +97,28 @@
       throw new Error('Receipt ' + sale.number + ' has no payment type. It was not shown.');
     }
 
-    var name = shop && String(shop.name || '').trim();
+    var top = shopLines(shop);
 
     return {
-      shopName: name || DEFAULT_SHOP_NAME,
+      shopName: top.name,
+      shopPhone: top.phone,
       title: WORDS.title,
       numberText: WORDS.number + ' ' + sale.number,
       when: dateText(sale.date) + '  ' + timeText(sale.at),
       items: items,
       itemsText: WORDS.items + ' ' + count,
       rows: rows,
-      thanks: WORDS.thanks
+      thanks: top.thanks
+    };
+  }
+
+  /* The shop's own lines. Anything not filled in falls back to the default. */
+  function shopLines(shop) {
+    var s = shop || {};
+    return {
+      name: String(s.name || '').trim() || DEFAULT_SHOP_NAME,
+      phone: String(s.phone || '').trim(),
+      thanks: String(s.thanks || '').trim() || WORDS.thanks
     };
   }
 
@@ -123,6 +134,7 @@
   function toHtml(r) {
     var html =
       '<div class="rc-shop">' + esc(r.shopName) + '</div>' +
+      (r.shopPhone ? '<div class="rc-phone">' + esc(r.shopPhone) + '</div>' : '') +
       '<div class="rc-pair"><span>' + esc(r.title) + '</span><span>' + esc(r.numberText) + '</span></div>' +
       '<div class="rc-when">' + esc(r.when) + '</div>' +
       '<div class="rc-rule"></div>';
@@ -151,6 +163,7 @@
   global.Receipt = {
     WORDS: WORDS,
     build: build,
+    shopLines: shopLines,
     toHtml: toHtml,
     dateText: dateText
   };

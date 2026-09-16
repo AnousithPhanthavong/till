@@ -8,7 +8,7 @@
   'use strict';
 
   var DB_NAME = 'till';
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;   /* 2 added the settings table. Existing data is kept. */
 
   /* ---------- opening the database ---------- */
 
@@ -51,6 +51,12 @@
         if (!db.objectStoreNames.contains('saleLines')) {
           var lines = db.createObjectStore('saleLines', { keyPath: 'id' });
           lines.createIndex('saleId', 'saleId', { unique: false });
+        }
+
+        /* Settings — small facts about the shop, like its name on receipts.
+           One row per setting. Added in version 2. */
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings', { keyPath: 'key' });
         }
       };
 
@@ -549,7 +555,57 @@
       });
   }
 
+  /* ---------- shop details (for receipts) ---------- */
+
+  var SHOP_LIMITS = { name: 40, phone: 30, thanks: 60 };
+
+  function tidy(text) {
+    var s = String(text === null || text === undefined ? '' : text);
+    if (s.normalize) { s = s.normalize('NFC'); }
+    return s.trim().replace(/\s+/g, ' ');
+  }
+
+  /* The shop details, or empty ones if nothing was saved yet. */
+  function getShop() {
+    return get('settings', 'shop').then(function (row) {
+      return {
+        name: row ? String(row.name || '') : '',
+        phone: row ? String(row.phone || '') : '',
+        thanks: row ? String(row.thanks || '') : ''
+      };
+    });
+  }
+
+  /* Saves the shop details, then reads them back to prove they saved. */
+  function saveShop(input) {
+    var shop = {
+      key: 'shop',
+      name: tidy(input && input.name),
+      phone: tidy(input && input.phone),
+      thanks: tidy(input && input.thanks),
+      updatedAt: new Date().toISOString()
+    };
+    if (!shop.name) {
+      return Promise.reject(new Error('Type the shop name.'));
+    }
+    var labels = { name: 'Shop name', phone: 'Phone', thanks: 'Bottom line' };
+    for (var k in SHOP_LIMITS) {
+      if (shop[k].length > SHOP_LIMITS[k]) {
+        return Promise.reject(new Error(labels[k] + ' is too long (' + SHOP_LIMITS[k] + ' characters at most).'));
+      }
+    }
+    return put('settings', shop).then(getShop).then(function (saved) {
+      if (saved.name !== shop.name || saved.phone !== shop.phone || saved.thanks !== shop.thanks) {
+        return Promise.reject(new Error('The shop details did not save. Try again.'));
+      }
+      return saved;
+    });
+  }
+
   global.Till = {
+    SHOP_LIMITS: SHOP_LIMITS,
+    getShop: getShop,
+    saveShop: saveShop,
     open: open,
     put: put,
     putMany: putMany,
