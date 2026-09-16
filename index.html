@@ -412,6 +412,14 @@
   .stocktotal .sum { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .item .left { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .instock { color: var(--good); }
+  .tag-expired { color: var(--bad); font-weight: 700; }
+  .tag-soon { color: var(--warn); font-weight: 700; }
+  .panel.alert { border: 2px solid var(--bad); }
+  .panel.alert.soon-only { border-color: var(--warn); }
+  .panel.alert h2 { color: var(--bad); }
+  .panel.alert.soon-only h2 { color: var(--warn); }
+  .item .right { text-align: right; white-space: nowrap; }
+  .item .right .left, .item .right .tagline { display: block; }
   .nostock { color: var(--warn); }
 
   footer {
@@ -431,6 +439,11 @@
 
     <h1 id="verdict">Checking…</h1>
     <p class="lede" id="lede">Reading what is saved on this device.</p>
+
+    <section class="panel alert" id="exp-panel" hidden>
+      <h2 id="exp-heading">Expiry</h2>
+      <div id="exp-list"></div>
+    </section>
 
     <section class="panel">
       <h2>Saved on this device</h2>
@@ -759,7 +772,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.addDelivery === 'function';
+    return typeof Till !== 'undefined' && typeof Till.expiryAlerts === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -777,7 +790,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Stock build 6a';
+      'Stock build 6b';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -1481,6 +1494,9 @@
           (last.method === 'cash' ? 'Cash' : 'QR') + ' \u00B7 ' + timeOf(last.at)
         : 'None yet';
 
+      return Till.expiryAlerts();
+    }).then(function (alerts) {
+      showExpiry(alerts);
       return Till.findSelfTestData();
     }).then(function (test) {
       $('cleanup').hidden = test.total === 0;
@@ -1493,6 +1509,61 @@
       $('lede').textContent = String(err && err.message ? err.message : err);
     });
   }
+
+  var EXPIRY_SHOWN = 20;
+
+  function showExpiry(alerts) {
+    if (!alerts.length) {
+      $('exp-panel').hidden = true;
+      $('exp-list').innerHTML = '';
+      return;
+    }
+    var expired = alerts.filter(function (a) { return a.state === 'expired'; }).length;
+    var soon = alerts.length - expired;
+    var parts = [];
+    if (expired) { parts.push('Expired: take ' + (expired === 1 ? 'it' : 'them') + ' off the shelf'); }
+    if (soon) { parts.push('Expiring within ' + Till.SOON_DAYS + ' days'); }
+    $('exp-heading').textContent = parts.join(' · ');
+    $('exp-panel').classList.toggle('soon-only', expired === 0);
+
+    var html = '';
+    alerts.slice(0, EXPIRY_SHOWN).forEach(function (a) {
+      var sub = 'Expires ' + Receipt.dateText(a.expiry);
+      if (a.lot) { sub += ' · Lot ' + esc(a.lot); }
+      html +=
+        '<button type="button" class="item" data-id="' + esc(a.productId) + '">' +
+          '<span class="who"><span class="nm">' + esc(a.name) + '</span>' +
+          '<span class="sub">' + sub + '</span></span>' +
+          '<span class="right"><span class="left">' + a.qtyRemaining.toLocaleString('en-US') +
+            ' left <span class="chev">\u203A</span></span>' + expiryTag(a) + '</span>' +
+        '</button>';
+    });
+    if (alerts.length > EXPIRY_SHOWN) {
+      html += '<div class="empty">and ' + (alerts.length - EXPIRY_SHOWN) + ' more.</div>';
+    }
+    $('exp-list').innerHTML = html;
+    $('exp-panel').hidden = false;
+  }
+
+  /* Tapping a warning opens that product's stock. */
+  $('exp-list').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    Till.get('products', row.getAttribute('data-id')).then(function (product) {
+      if (!product) { refresh(); return; }
+      editingId = product.id;
+      stockFrom = 'home';
+      openStock(product);
+    });
+  });
+
+  /* A till left open overnight: check again when the app comes back. */
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !$('screen-home').hidden &&
+        dbIsCurrent() && cartIsCurrent() && receiptIsCurrent()) {
+      refresh();
+    }
+  });
 
   /* ---------- buttons ---------- */
 
@@ -1575,10 +1646,25 @@
     refresh();
   });
 
+  /* ---------- expiry wording ---------- */
+
+  /* The short coloured words for a batch: "Expired", "Last day", "12 days left". */
+  function expiryTag(e) {
+    if (e.state === 'expired') {
+      return '<span class="tagline tag-expired">Expired</span>';
+    }
+    if (e.state === 'soon') {
+      return '<span class="tagline tag-soon">' +
+        (e.days === 0 ? 'Last day' : plural(e.days, 'day left', 'days left')) + '</span>';
+    }
+    return '';
+  }
+
   /* ---------- stock and deliveries ---------- */
 
   var stockProduct = null;   /* the product whose stock is open */
   var deliveryId = null;     /* made when the screen opens, so Save saves once */
+  var stockFrom = 'products'; /* where Back goes: 'products' or 'home' */
 
   $('f-stock').addEventListener('click', function () {
     if (!editingId) { return; }
@@ -1587,11 +1673,13 @@
         say('f-msg', 'bad', 'That product is no longer saved.');
         return;
       }
+      stockFrom = 'products';
       openStock(product);
     });
   });
 
   function openStock(product) {
+    $('st-back').textContent = stockFrom === 'home' ? 'Back to home' : 'Back to products';
     stockProduct = product;
     deliveryId = Till.newBatchId();
     $('st-name').textContent = product.name;
@@ -1626,6 +1714,7 @@
       }
 
       var html = '';
+      var todayText = Till.localDate(new Date());
       batches.forEach(function (b) {
         var title = b.expiry ? 'Expires ' + Receipt.dateText(b.expiry) : 'No expiry date';
         var sub = 'Received ' + Receipt.dateText(b.receivedDate) +
@@ -1636,7 +1725,8 @@
           '<div class="item">' +
             '<span class="who"><span class="nm">' + title + '</span>' +
             '<span class="sub">' + sub + '</span></span>' +
-            '<span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
+            '<span class="right"><span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
+              expiryTag(Till.expiryState(b.expiry, todayText)) + '</span>' +
           '</div>';
       });
       $('st-list').innerHTML = html;
@@ -1689,6 +1779,11 @@
   $('st-back').addEventListener('click', function () {
     stockProduct = null;
     deliveryId = null;
+    if (stockFrom === 'home') {
+      show('home');
+      refresh();
+      return;
+    }
     say('p-msg', '', '');
     show('products');
     loadProducts();

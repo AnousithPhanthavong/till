@@ -1,6 +1,6 @@
 /* db.js — where the till keeps its data on the iPad.
    Every screen built later talks to the data through this one file.
-   Step 6a added stock deliveries (no change to the tables).
+   Step 6a added stock deliveries, 6b expiry warnings (no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -704,6 +704,69 @@
     });
   }
 
+
+  /* ---------- expiry warnings ---------- */
+
+  var SOON_DAYS = 60;
+
+  /* Whole days from one YYYY-MM-DD date to another. */
+  function daysBetween(fromYmd, toYmd) {
+    var a = fromYmd.split('-').map(Number);
+    var b = toYmd.split('-').map(Number);
+    return Math.round((Date.UTC(b[0], b[1] - 1, b[2]) - Date.UTC(a[0], a[1] - 1, a[2])) / 86400000);
+  }
+
+  /* What one batch's expiry means today:
+     'expired' (the date has passed), 'soon' (today up to SOON_DAYS away),
+     or 'ok'. A batch expiring today is 'soon' — its last day to sell.
+     Batches with no expiry date are always 'ok'. */
+  function expiryState(expiry, todayYmd) {
+    if (!expiry || !isRealDate(expiry)) { return { state: 'ok', days: null }; }
+    var days = daysBetween(todayYmd, expiry);
+    if (days < 0) { return { state: 'expired', days: days }; }
+    if (days <= SOON_DAYS) { return { state: 'soon', days: days }; }
+    return { state: 'ok', days: days };
+  }
+
+  /* From lists it is given (reads nothing): every batch still in stock
+     that is expired or expiring soon, earliest expiry first. */
+  function classifyExpiry(products, batches, todayYmd) {
+    var byId = {};
+    (products || []).forEach(function (p) {
+      if (p && p.active !== false) { byId[p.id] = p; }
+    });
+    var list = [];
+    (batches || []).forEach(function (b) {
+      if (!b || !Number.isInteger(b.qtyRemaining) || b.qtyRemaining <= 0) { return; }
+      var product = byId[b.productId];
+      if (!product) { return; }
+      var e = expiryState(b.expiry, todayYmd);
+      if (e.state === 'ok') { return; }
+      list.push({
+        batchId: b.id,
+        productId: b.productId,
+        name: String(product.name || ''),
+        expiry: b.expiry,
+        lot: b.lot || '',
+        qtyRemaining: b.qtyRemaining,
+        state: e.state,
+        days: e.days
+      });
+    });
+    list.sort(function (x, y) {
+      if (x.expiry !== y.expiry) { return x.expiry < y.expiry ? -1 : 1; }
+      return x.name.localeCompare(y.name);
+    });
+    return list;
+  }
+
+  /* The warnings for right now, on this device's own clock. */
+  function expiryAlerts() {
+    return Promise.all([getAll('products'), getAll('batches')]).then(function (all) {
+      return classifyExpiry(all[0], all[1], localDate(new Date()));
+    });
+  }
+
   /* ---------- shop details (for receipts) ---------- */
 
   var SHOP_LIMITS = { name: 40, phone: 30, thanks: 60 };
@@ -782,7 +845,12 @@
     isRealDate: isRealDate,
     addDelivery: addDelivery,
     stockByProduct: stockByProduct,
-    MAX_DELIVERY_QTY: MAX_DELIVERY_QTY
+    MAX_DELIVERY_QTY: MAX_DELIVERY_QTY,
+    SOON_DAYS: SOON_DAYS,
+    daysBetween: daysBetween,
+    expiryState: expiryState,
+    classifyExpiry: classifyExpiry,
+    expiryAlerts: expiryAlerts
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
