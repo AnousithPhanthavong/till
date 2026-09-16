@@ -407,6 +407,13 @@
     .rc-rule { border-top: 1px dashed #000; }
   }
 
+  /* stock screen */
+  .stocktotal { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
+  .stocktotal .sum { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .item .left { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .instock { color: var(--good); }
+  .nostock { color: var(--warn); }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -601,7 +608,7 @@
   <section id="screen-form" hidden>
 
     <h1 id="f-title">Add product</h1>
-    <p class="lede">Stock quantities are not here — those come in with each delivery, later.</p>
+    <p class="lede" id="f-lede">Stock is not typed here. Save the product, then open it again and tap Stock and deliveries.</p>
     <p class="msg" id="f-msg" hidden></p>
 
     <section class="panel">
@@ -641,7 +648,57 @@
     </section>
 
     <button id="f-save">Save product</button>
+    <button id="f-stock" class="secondary" hidden>Stock and deliveries</button>
     <button id="f-cancel" class="secondary">Cancel</button>
+
+  </section>
+
+  <!-- ================= STOCK AND DELIVERIES ================= -->
+  <section id="screen-stock" hidden>
+
+    <h1>Stock</h1>
+    <p class="lede" id="st-name"></p>
+    <p class="msg" id="st-msg" hidden></p>
+
+    <section class="panel">
+      <div class="row stocktotal"><span>In stock now</span><span class="sum" id="st-total">–</span></div>
+    </section>
+
+    <section class="panel">
+      <h2 id="st-heading">Deliveries still in stock</h2>
+      <div id="st-list"><div class="empty">Reading…</div></div>
+    </section>
+
+    <section class="panel">
+      <h2>Add a delivery</h2>
+
+      <div class="field">
+        <label for="st-qty">How many arrived</label>
+        <input id="st-qty" type="text" inputmode="numeric" autocomplete="off">
+        <p class="hint">Count single items you sell, not boxes. A box of 12 tins is 12.</p>
+      </div>
+
+      <div class="field" id="st-expiry-field">
+        <label for="st-expiry">Expiry date</label>
+        <input id="st-expiry" type="date">
+        <p class="hint">As printed on the product. If items in one delivery have different dates, save them as separate deliveries.</p>
+      </div>
+
+      <div class="field">
+        <label for="st-lot">Lot number (optional)</label>
+        <input id="st-lot" type="text" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <p class="hint">The batch code printed near the expiry date. Helps if a product is ever recalled.</p>
+      </div>
+
+      <div class="field">
+        <label for="st-cost">Cost for each one (optional)</label>
+        <input id="st-cost" type="text" inputmode="numeric" autocomplete="off">
+        <p class="hint">What you paid the supplier for one item, in kip.</p>
+      </div>
+    </section>
+
+    <button id="st-save">Save delivery</button>
+    <button id="st-back" class="secondary">Back to products</button>
 
   </section>
 
@@ -702,7 +759,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.saveShop === 'function';
+    return typeof Till !== 'undefined' && typeof Till.addDelivery === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -720,7 +777,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Receipt build 5c';
+      'Stock build 6a';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -734,6 +791,7 @@
     $('screen-shop').hidden = (which !== 'shop');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
+    $('screen-stock').hidden = (which !== 'stock');
     window.scrollTo(0, 0);
   }
 
@@ -1353,7 +1411,9 @@
     $('product-list').innerHTML = '<div class="empty">Reading…</div>';
     $('p-count').textContent = 'Reading…';
 
-    return Till.listProducts().then(function (rows) {
+    return Promise.all([Till.listProducts(), Till.stockByProduct()]).then(function (got) {
+      var rows = got[0];
+      var stock = got[1];
       $('p-count').textContent = rows.length === 0
         ? 'Nothing saved yet.'
         : plural(rows.length, 'product saved. Tap one to change it.', 'products saved. Tap one to change it.');
@@ -1368,6 +1428,9 @@
       rows.forEach(function (p) {
         var sub = p.barcode ? esc(p.barcode) : 'No barcode';
         if (p.tracksExpiry) { sub += ' · has expiry dates'; }
+        var have = stock[p.id] || 0;
+        sub += ' · <span class="' + (have > 0 ? 'instock' : 'nostock') + '">' +
+          (have > 0 ? 'In stock: ' + have.toLocaleString('en-US') : 'No stock recorded') + '</span>';
 
         html +=
           '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
@@ -1451,6 +1514,8 @@
     $('f-cost').value = (product && product.costKip) ? String(product.costKip) : '';
     $('f-expiry').checked = product ? !!product.tracksExpiry : false;
 
+    $('f-stock').hidden = !product;
+
     say('f-msg', '', '');
     $('f-save').disabled = false;
     show('form');
@@ -1508,6 +1573,125 @@
   $('back-home').addEventListener('click', function () {
     show('home');
     refresh();
+  });
+
+  /* ---------- stock and deliveries ---------- */
+
+  var stockProduct = null;   /* the product whose stock is open */
+  var deliveryId = null;     /* made when the screen opens, so Save saves once */
+
+  $('f-stock').addEventListener('click', function () {
+    if (!editingId) { return; }
+    Till.get('products', editingId).then(function (product) {
+      if (!product) {
+        say('f-msg', 'bad', 'That product is no longer saved.');
+        return;
+      }
+      openStock(product);
+    });
+  });
+
+  function openStock(product) {
+    stockProduct = product;
+    deliveryId = Till.newBatchId();
+    $('st-name').textContent = product.name;
+    $('st-qty').value = '';
+    $('st-expiry').value = '';
+    $('st-lot').value = '';
+    $('st-cost').value = '';
+    $('st-expiry-field').hidden = !product.tracksExpiry;
+    $('st-save').disabled = false;
+    say('st-msg', '', '');
+    show('stock');
+    loadStock();
+  }
+
+  function loadStock() {
+    $('st-total').textContent = '–';
+    $('st-list').innerHTML = '<div class="empty">Reading…</div>';
+    var productId = stockProduct.id;
+
+    return Till.batchesForProduct(productId).then(function (batches) {
+      if (!stockProduct || stockProduct.id !== productId) { return; }
+      var total = 0;
+      batches.forEach(function (b) { total += b.qtyRemaining; });
+      $('st-total').textContent = total.toLocaleString('en-US');
+      $('st-heading').textContent = stockProduct.tracksExpiry
+        ? 'Deliveries still in stock, earliest expiry first'
+        : 'Deliveries still in stock';
+
+      if (!batches.length) {
+        $('st-list').innerHTML = '<div class="empty">No stock recorded. Add a delivery below.</div>';
+        return;
+      }
+
+      var html = '';
+      batches.forEach(function (b) {
+        var title = b.expiry ? 'Expires ' + Receipt.dateText(b.expiry) : 'No expiry date';
+        var sub = 'Received ' + Receipt.dateText(b.receivedDate) +
+          ' · ' + b.qtyReceived.toLocaleString('en-US') + ' arrived';
+        if (b.lot) { sub += ' · Lot ' + esc(b.lot); }
+        if (b.costKip) { sub += ' · ' + Till.formatKip(b.costKip) + ' each'; }
+        html +=
+          '<div class="item">' +
+            '<span class="who"><span class="nm">' + title + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
+          '</div>';
+      });
+      $('st-list').innerHTML = html;
+    }).catch(function (err) {
+      $('st-list').innerHTML = '<div class="empty">' + esc(err && err.message ? err.message : err) + '</div>';
+    });
+  }
+
+  $('st-save').addEventListener('click', function () {
+    if (!stockProduct || !deliveryId) { return; }
+    /* The old message stays until the new one replaces it, so nothing on
+       the page moves under your finger if Save is tapped twice. */
+    $('st-save').disabled = true;
+
+    Till.addDelivery(deliveryId, {
+      productId: stockProduct.id,
+      qty: $('st-qty').value,
+      expiry: $('st-expiry').value,
+      lot: $('st-lot').value,
+      costKip: $('st-cost').value
+    }).then(function (result) {
+      var b = result.batch;
+      say('st-msg', 'good', 'Saved: ' + b.qtyReceived.toLocaleString('en-US') + ' arrived' +
+        (b.expiry ? ', expiring ' + Receipt.dateText(b.expiry) : '') + '.');
+      /* Ready for the next delivery, with a new id. */
+      deliveryId = Till.newBatchId();
+      $('st-qty').value = '';
+      $('st-expiry').value = '';
+      $('st-lot').value = '';
+      $('st-cost').value = '';
+      return loadStock();
+    }).catch(function (err) {
+      say('st-msg', 'bad', String(err && err.message ? err.message : err));
+    }).then(function () {
+      $('st-save').disabled = false;
+      window.scrollTo(0, 0);
+    });
+  });
+
+  /* Enter in a delivery box never saves by accident. */
+  ['st-qty', 'st-expiry', 'st-lot', 'st-cost'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.keyCode === 13) {
+        event.preventDefault();
+        event.target.blur();
+      }
+    });
+  });
+
+  $('st-back').addEventListener('click', function () {
+    stockProduct = null;
+    deliveryId = null;
+    say('p-msg', '', '');
+    show('products');
+    loadProducts();
   });
 
   /* ---------- shop details ---------- */

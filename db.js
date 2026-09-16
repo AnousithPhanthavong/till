@@ -1,5 +1,6 @@
 /* db.js — where the till keeps its data on the iPad.
    Every screen built later talks to the data through this one file.
+   Step 6a added stock deliveries (no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -555,6 +556,154 @@
       });
   }
 
+
+  /* ---------- stock deliveries ----------
+     A batch is one delivery of one product, with its own expiry date.
+     A delivery is saved once and its details are never changed. Only the
+     quantity left goes down later, when things are sold (Step 6c). */
+
+  var MAX_DELIVERY_QTY = 99999;
+  var MAX_LOT = 30;
+  var MAX_EXPIRY_YEARS = 10;
+
+  /* A fresh id for a delivery. The form asks for one when it opens, so
+     pressing Save twice can only ever save one delivery. */
+  function newBatchId() {
+    return newId('batch');
+  }
+
+  /* True for a real calendar date written YYYY-MM-DD (so not 31/02). */
+  function isRealDate(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+    if (!m) { return false; }
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return d.getFullYear() === Number(m[1]) &&
+      d.getMonth() === Number(m[2]) - 1 &&
+      d.getDate() === Number(m[3]);
+  }
+
+  /* Checks a delivery and builds the record to save. Throws a
+     plain-language error if anything is wrong. Saves nothing. */
+  function buildDelivery(batchId, product, input, now) {
+    if (typeof batchId !== 'string' || !/^batch_[a-z0-9_]+$/.test(batchId)) {
+      throw new Error('This delivery has no proper number. Go back and open it again.');
+    }
+    if (!product || product.active === false) {
+      throw new Error('That product is no longer saved.');
+    }
+
+    var qtyText = String(input.qty === null || input.qty === undefined ? '' : input.qty).trim();
+    if (!/^[0-9,\s]+$/.test(qtyText)) {
+      throw new Error('Type how many arrived, as a whole number.');
+    }
+    var qty = toKip(qtyText);
+    if (qty === null || qty < 1) {
+      throw new Error('Type how many arrived.');
+    }
+    if (qty > MAX_DELIVERY_QTY) {
+      throw new Error('That quantity is too large to be right (' +
+        MAX_DELIVERY_QTY.toLocaleString('en-US') + ' at most).');
+    }
+
+    var expiry = '';
+    if (product.tracksExpiry) {
+      expiry = String(input.expiry || '').trim();
+      if (!expiry) {
+        throw new Error('"' + product.name + '" has expiry dates. Enter the expiry date printed on it.');
+      }
+      if (!isRealDate(expiry)) {
+        throw new Error('That expiry date is not a real date.');
+      }
+      var todayText = localDate(now);
+      if (expiry < todayText) {
+        throw new Error('That expiry date has already passed. Check the date on the product.');
+      }
+      var limit = localDate(new Date(now.getFullYear() + MAX_EXPIRY_YEARS, now.getMonth(), now.getDate()));
+      if (expiry > limit) {
+        throw new Error('That expiry date is more than ' + MAX_EXPIRY_YEARS + ' years away. Check the year.');
+      }
+    }
+
+    var lot = tidy(input.lot);
+    if (lot.length > MAX_LOT) {
+      throw new Error('The lot number is too long (' + MAX_LOT + ' characters at most).');
+    }
+
+    var costKip = toKip(input.costKip);
+    if (costKip !== null && costKip > 100000000) {
+      throw new Error('That cost is too large to be right.');
+    }
+
+    return {
+      id: batchId,
+      productId: product.id,
+      qtyReceived: qty,
+      qtyRemaining: qty,
+      expiry: expiry,          /* '' means this product has no expiry date */
+      lot: lot,
+      costKip: costKip,        /* null means not known */
+      receivedAt: now.toISOString(),
+      receivedDate: localDate(now)
+    };
+  }
+
+  /* Saves one delivery, all or nothing, then reads it back to prove it.
+     If this delivery id is already saved (a double tap), returns that one
+     instead of saving a second. Resolves to { batch, alreadySaved }. */
+  function addDelivery(batchId, input) {
+    return get('products', input && input.productId).then(function (product) {
+      var built;
+      try {
+        built = buildDelivery(batchId, product, input || {}, new Date());
+      } catch (err) {
+        return Promise.reject(err);
+      }
+
+      return open().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var t = db.transaction('batches', 'readwrite');
+          var store = t.objectStore('batches');
+          var result = null;
+
+          store.get(batchId).onsuccess = function (e) {
+            if (e.target.result) {
+              result = { batch: e.target.result, alreadySaved: true };
+              return;
+            }
+            /* add, not put: add refuses to overwrite anything. */
+            store.add(built);
+            result = { batch: built, alreadySaved: false };
+          };
+
+          t.oncomplete = function () { resolve(result); };
+          t.onerror = function () { reject(new Error('The delivery was NOT saved. Try Save again.')); };
+          t.onabort = function () { reject(new Error('The delivery was NOT saved. Try Save again.')); };
+        });
+      });
+    }).then(function (result) {
+      return get('batches', batchId).then(function (saved) {
+        if (!saved || saved.qtyReceived !== result.batch.qtyReceived) {
+          return Promise.reject(new Error('The delivery did not save. Try again.'));
+        }
+        return { batch: saved, alreadySaved: result.alreadySaved };
+      });
+    });
+  }
+
+  /* How many of each product are in stock: { productId: quantity }.
+     Adds up what is left in every batch. */
+  function stockByProduct() {
+    return getAll('batches').then(function (rows) {
+      var totals = {};
+      rows.forEach(function (b) {
+        if (Number.isInteger(b.qtyRemaining) && b.qtyRemaining > 0) {
+          totals[b.productId] = (totals[b.productId] || 0) + b.qtyRemaining;
+        }
+      });
+      return totals;
+    });
+  }
+
   /* ---------- shop details (for receipts) ---------- */
 
   var SHOP_LIMITS = { name: 40, phone: 30, thanks: 60 };
@@ -628,7 +777,12 @@
     newSaleId: newSaleId,
     saveSale: saveSale,
     getSale: getSale,
-    localDate: localDate
+    localDate: localDate,
+    newBatchId: newBatchId,
+    isRealDate: isRealDate,
+    addDelivery: addDelivery,
+    stockByProduct: stockByProduct,
+    MAX_DELIVERY_QTY: MAX_DELIVERY_QTY
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
