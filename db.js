@@ -1,6 +1,7 @@
 /* db.js — where the till keeps its data on the iPad.
    Every screen built later talks to the data through this one file.
-   Step 6a added stock deliveries, 6b expiry warnings (no change to the tables).
+   Step 6a added stock deliveries, 6b expiry warnings, 6c selling takes
+   stock earliest-expiry first (no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -497,7 +498,12 @@
      - If a sale with this id is already saved (a double tap, or a retry),
        it returns that saved sale instead of saving a second one.
      - Gives each sale the next receipt number: 1, 2, 3 ...
-     - Does not touch stock yet. That arrives with Step 6.
+     - Takes the items out of stock, earliest expiry first, skipping
+       expired batches, in the same save (Step 6c). Each line records
+       which batches it came from (batches) and how many were sold
+       beyond the stock on record (unrecordedQty). A sale is never
+       refused for lack of recorded stock.
+     - A sale saved twice (same id) never takes stock twice.
      Resolves to { sale, lines, alreadySaved }. */
   function saveSale(saleId, cart, payment) {
     var built;
@@ -509,9 +515,10 @@
 
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
-        var t = db.transaction(['sales', 'saleLines'], 'readwrite');
+        var t = db.transaction(['sales', 'saleLines', 'batches'], 'readwrite');
         var sales = t.objectStore('sales');
         var linesStore = t.objectStore('saleLines');
+        var batchStore = t.objectStore('batches');
         var result = null;
 
         sales.get(saleId).onsuccess = function (e) {
@@ -533,10 +540,47 @@
             });
             built.sale.number = highest + 1;
 
-            /* add, not put: add refuses to overwrite anything. */
-            sales.add(built.sale);
-            built.lines.forEach(function (l) { linesStore.add(l); });
-            result = { sale: built.sale, lines: built.lines, alreadySaved: false };
+            /* Read each product's batches, still inside this same save. */
+            var waiting = built.lines.length;
+            var batchesFor = {};
+            built.lines.forEach(function (l) {
+              batchStore.index('productId').getAll(l.productId).onsuccess = function (e4) {
+                batchesFor[l.productId] = e4.target.result;
+                waiting -= 1;
+                if (waiting === 0) { finish(); }
+              };
+            });
+
+            function finish() {
+              /* Take stock earliest-expiry first and note where it came from.
+                 Everything is checked before anything is written. */
+              var changed = {};
+              var ok = true;
+              built.lines.forEach(function (l) {
+                var plan = allocate(batchesFor[l.productId], l.qty, built.sale.date);
+                l.batches = plan.takes;
+                l.unrecordedQty = plan.unrecordedQty;
+                plan.takes.forEach(function (take) {
+                  var b = batchesFor[l.productId].filter(function (x) { return x.id === take.batchId; })[0];
+                  if (!b || !Number.isInteger(take.qty) || take.qty < 1 || take.qty > b.qtyRemaining) {
+                    ok = false;
+                    return;
+                  }
+                  b.qtyRemaining -= take.qty;
+                  changed[b.id] = b;
+                });
+              });
+              if (!ok) {
+                t.abort();
+                return;
+              }
+              Object.keys(changed).forEach(function (id) { batchStore.put(changed[id]); });
+
+              /* add, not put: add refuses to overwrite anything. */
+              sales.add(built.sale);
+              built.lines.forEach(function (l) { linesStore.add(l); });
+              result = { sale: built.sale, lines: built.lines, alreadySaved: false };
+            }
           };
         };
 
@@ -760,6 +804,60 @@
     return list;
   }
 
+  /* ---------- taking stock when selling (first-expired-first-out) ---------- */
+
+  /* Earliest expiry first. No expiry date goes last. Same date: the
+     delivery that arrived first goes first. */
+  function fefoOrder(a, b) {
+    var ax = a.expiry || '9999-12-31';
+    var bx = b.expiry || '9999-12-31';
+    if (ax !== bx) { return ax < bx ? -1 : 1; }
+    if (a.receivedAt !== b.receivedAt) { return a.receivedAt < b.receivedAt ? -1 : 1; }
+    return a.id < b.id ? -1 : 1;
+  }
+
+  /* True if this batch can be sold from today: something left, not expired. */
+  function isSellable(b, todayYmd) {
+    return !!b && Number.isInteger(b.qtyRemaining) && b.qtyRemaining > 0 &&
+      expiryState(b.expiry, todayYmd).state !== 'expired';
+  }
+
+  /* Works out which batches `qty` items come from. Reads and changes
+     nothing. Returns { takes: [{ batchId, qty, expiry }], unrecordedQty }.
+     unrecordedQty is how many were sold beyond the stock on record. */
+  function allocate(batches, qty, todayYmd) {
+    var usable = (batches || [])
+      .filter(function (b) { return isSellable(b, todayYmd); })
+      .sort(fefoOrder);
+    var need = qty;
+    var takes = [];
+    usable.forEach(function (b) {
+      if (need <= 0) { return; }
+      var n = Math.min(need, b.qtyRemaining);
+      takes.push({ batchId: b.id, qty: n, expiry: b.expiry || '' });
+      need -= n;
+    });
+    return { takes: takes, unrecordedQty: need };
+  }
+
+  /* From a list of batches (reads nothing): per product, how many can be
+     sold and how many are expired. { productId: { usable, expired } } */
+  function sellableByProduct(batches, todayYmd) {
+    var out = {};
+    (batches || []).forEach(function (b) {
+      if (!b || !Number.isInteger(b.qtyRemaining) || b.qtyRemaining <= 0) { return; }
+      var s = out[b.productId] || (out[b.productId] = { usable: 0, expired: 0 });
+      if (isSellable(b, todayYmd)) { s.usable += b.qtyRemaining; } else { s.expired += b.qtyRemaining; }
+    });
+    return out;
+  }
+
+  function sellableStock() {
+    return getAll('batches').then(function (rows) {
+      return sellableByProduct(rows, localDate(new Date()));
+    });
+  }
+
   /* The warnings for right now, on this device's own clock. */
   function expiryAlerts() {
     return Promise.all([getAll('products'), getAll('batches')]).then(function (all) {
@@ -850,7 +948,10 @@
     daysBetween: daysBetween,
     expiryState: expiryState,
     classifyExpiry: classifyExpiry,
-    expiryAlerts: expiryAlerts
+    expiryAlerts: expiryAlerts,
+    allocate: allocate,
+    sellableByProduct: sellableByProduct,
+    sellableStock: sellableStock
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));

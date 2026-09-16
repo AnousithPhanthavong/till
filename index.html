@@ -413,6 +413,8 @@
   .item .left { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .instock { color: var(--good); }
   .tag-expired { color: var(--bad); font-weight: 700; }
+  .cartline .stockwarn { margin: 8px 0 0; font-size: 15px; font-weight: 600; color: var(--warn); }
+  .cartline .stockwarn[data-state="bad"] { color: var(--bad); }
   .tag-soon { color: var(--warn); font-weight: 700; }
   .panel.alert { border: 2px solid var(--bad); }
   .panel.alert.soon-only { border-color: var(--warn); }
@@ -772,7 +774,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.expiryAlerts === 'function';
+    return typeof Till !== 'undefined' && typeof Till.sellableStock === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -790,7 +792,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Stock build 6b';
+      'Stock build 6c';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -827,6 +829,27 @@
      but closing the app empties it. Nothing is saved until checkout. */
   var cart = { lines: [] };
 
+  /* Stock on record per product, { usable, expired }. Read when the sell
+     screen opens and after each sale. Only used for showing warnings:
+     a sale is never blocked by it. */
+  var sellStock = {};
+
+  function loadSellStock() {
+    return Till.sellableStock().then(function (stock) {
+      sellStock = stock;
+      if (!$('screen-sell').hidden) {
+        showMatches();
+        showCart();
+      }
+    }).catch(function () {
+      sellStock = {};
+    });
+  }
+
+  function stockOf(productId) {
+    return sellStock[productId] || { usable: 0, expired: 0 };
+  }
+
   function openSell() {
     show('sell');
     $('s-search').value = '';
@@ -836,6 +859,7 @@
     showMatches();
     showCart();
 
+    loadSellStock();
     Till.listProducts().then(function (rows) {
       sellProducts = rows;
       $('s-lede').textContent = rows.length === 0
@@ -874,11 +898,17 @@
 
     var html = '';
     found.forEach(function (p) {
+      var st = stockOf(p.id);
+      var stockText = st.usable > 0
+        ? '<span class="instock">In stock: ' + st.usable.toLocaleString('en-US') + '</span>'
+        : (st.expired > 0
+          ? '<span class="tag-expired">Only expired stock</span>'
+          : '<span class="nostock">No stock recorded</span>');
       html +=
         '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
           '<span class="who">' +
             '<span class="nm">' + esc(p.name) + '</span>' +
-            '<span class="sub">' + (p.barcode ? esc(p.barcode) : 'No barcode') + '</span>' +
+            '<span class="sub">' + (p.barcode ? esc(p.barcode) : 'No barcode') + ' · ' + stockText + '</span>' +
           '</span>' +
           '<span class="price">' + Till.formatKip(p.priceKip || 0) + '</span>' +
         '</button>';
@@ -902,6 +932,18 @@
     var html = '';
     cart.lines.forEach(function (l) {
       var id = esc(l.productId);
+      var st = stockOf(l.productId);
+      var warn = '';
+      if (l.qty > st.usable) {
+        if (st.usable === 0 && st.expired > 0) {
+          warn = '<p class="stockwarn" data-state="bad">Only expired stock is on record. Check the date on this item before selling it.</p>';
+        } else if (st.usable === 0) {
+          warn = '<p class="stockwarn">No stock on record for this. It can still be sold.</p>';
+        } else {
+          warn = '<p class="stockwarn">Only ' + st.usable.toLocaleString('en-US') +
+            ' on record. The rest will be marked as not in stock records.</p>';
+        }
+      }
       html +=
         '<div class="cartline">' +
           '<div class="top">' +
@@ -910,7 +952,7 @@
               '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
             '</span>' +
             '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
-          '</div>' +
+          '</div>' + warn +
           '<div class="controls">' +
             '<button type="button" class="secondary" data-act="minus" data-id="' + id + '"' +
               (l.qty <= 1 ? ' disabled' : '') + ' aria-label="One less">\u2212</button>' +
@@ -1198,6 +1240,11 @@
     var cash = sale.method === 'cash';
 
     $('d-lede').textContent = 'Receipt no. ' + sale.number + ' \u00B7 ' + sale.date + ' ' + timeOf(sale.at);
+    var unrecorded = 0;
+    (result.lines || []).forEach(function (l) { unrecorded += l.unrecordedQty || 0; });
+    if (unrecorded > 0) {
+      $('d-lede').textContent += ' \u00B7 ' + plural(unrecorded, 'item was', 'items were') + ' not in stock records';
+    }
     if (cash) {
       $('d-box').innerHTML = 'Give change:<span class="big">' + Till.formatKip(sale.changeKip) + '</span>';
     } else {
@@ -1220,6 +1267,7 @@
   function newSale() {
     cart = Sell.emptyCart();
     show('sell');
+    loadSellStock();
     $('s-search').value = '';
     say('s-msg', '', '');
     showMatches();
