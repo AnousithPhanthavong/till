@@ -6,6 +6,7 @@
    Step 8a: making the file.
    Step 8b: checking a file before it is loaded.
    Step 8c: confirming a restore came out exactly like the file.
+   Step 8d: the reminder on Home when a backup is due.
 
    The file is JSON: plain text laid out so that a program can read it back
    exactly. At the top is a header saying what made it, when, and how many
@@ -288,7 +289,73 @@
     return out;
   }
 
+  /* ---------- reminder (8d) ---------- */
+
+  /* A backup counts as due when something changed and the last one is
+     this many days old or more. */
+  var REMINDER_DAYS = 3;
+
+  function dayNumber(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+    return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) / 86400000 : null;
+  }
+
+  /* How many things were added or changed after `sinceIso` (an ISO time).
+     With no time, everything counts. */
+  function changesSince(data, sinceIso) {
+    var since = String(sinceIso || '');
+    var n = 0;
+    function after(t) { return typeof t === 'string' && t > since; }
+    (data.sales || []).forEach(function (r) { if (r && after(r.at)) { n += 1; } });
+    (data.batches || []).forEach(function (r) { if (r && after(r.receivedAt)) { n += 1; } });
+    (data.removals || []).forEach(function (r) { if (r && after(r.at)) { n += 1; } });
+    (data.products || []).forEach(function (r) {
+      if (r && (after(r.createdAt) || after(r.updatedAt))) { n += 1; }
+    });
+    (data.settings || []).forEach(function (r) {
+      if (r && r.key === 'shop' && after(r.updatedAt)) { n += 1; }
+    });
+    return n;
+  }
+
+  /* What Home should say about backups.
+     data: everything on the device (as from readAll).
+     note: the saved { at, date } of the last backup, or null.
+     Returns { state, days, changes }
+       state 'empty' - nothing on the device worth backing up
+             'never' - data exists, no backup yet (due)
+             'due'   - changes since, and REMINDER_DAYS or more old
+             'ok'    - otherwise
+       days - whole days since the last backup (null if never). */
+  function reminder(data, note, todayYmd) {
+    var hasData = ['products', 'batches', 'sales', 'removals'].some(function (t) {
+      return data && data[t] && data[t].length > 0;
+    });
+    var at = note && typeof note.at === 'string' ? note.at : '';
+    var changes = changesSince(data || {}, at);
+    if (!at) {
+      return { state: hasData ? 'never' : 'empty', days: null, changes: changes };
+    }
+    var a = dayNumber(note.date);
+    var b = dayNumber(todayYmd);
+    var days = (a === null || b === null) ? null : Math.max(0, Math.round(b - a));
+    var due = changes > 0 && (days === null || days >= REMINDER_DAYS);
+    return { state: due ? 'due' : 'ok', days: days, changes: changes };
+  }
+
+  /* "today", "yesterday", "5 days ago". */
+  function agoText(days) {
+    if (days === null || days === undefined) { return 'unknown'; }
+    if (days === 0) { return 'today'; }
+    if (days === 1) { return 'yesterday'; }
+    return days + ' days ago';
+  }
+
   global.Backup = {
+    REMINDER_DAYS: REMINDER_DAYS,
+    changesSince: changesSince,
+    reminder: reminder,
+    agoText: agoText,
     differences: differences,
     MAX_FILE_BYTES: MAX_FILE_BYTES,
     check: check,

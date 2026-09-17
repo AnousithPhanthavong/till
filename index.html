@@ -317,6 +317,7 @@
   .yearbox { padding: 6px 18px 14px; color: var(--muted); font-size: 15px; }
   .yearbox .big { display: block; color: var(--ink); font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .panel .yearbox + .row { border-top: 1px solid var(--line); }
+  .row .v[data-state="warn"] { color: var(--warn); }
   .row .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
   .complete { font-size: 22px; min-height: 64px; margin-bottom: 0; }
 
@@ -475,6 +476,12 @@
       <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
       <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
       <div class="row"><span>Today</span><span class="v" id="today-sales">–</span></div>
+      <div class="row"><span>Last backup</span><span class="v" id="last-backup">–</span></div>
+    </section>
+
+    <section class="panel alert soon-only" id="backup-due" hidden>
+      <h2 style="color: var(--warn)">Backup due</h2>
+      <div class="row"><span id="backup-due-text"></span></div>
     </section>
 
     <button id="go-sell">Sell</button>
@@ -1029,7 +1036,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.restoreAll === 'function';
+    return typeof Till !== 'undefined' && typeof Till.saveBackupNote === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -1042,7 +1049,7 @@
     return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
   function backupIsCurrent() {
-    return typeof Backup !== 'undefined' && typeof Backup.differences === 'function';
+    return typeof Backup !== 'undefined' && typeof Backup.reminder === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
@@ -1058,7 +1065,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Backup build 8c';
+      'Backup build 8d';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -1797,7 +1804,36 @@
 
   /* ---------- the home screen ---------- */
 
+  /* The Last backup line and the amber Backup due box on Home. */
+  function showBackupReminder() {
+    return Promise.all([Till.readAll(), Till.getBackupNote()]).then(function (got) {
+      var r = Backup.reminder(got[0], got[1], Till.localDate(new Date()));
+      var line = $('last-backup');
+      var since = r.changes ? ' \u00B7 ' + plural(r.changes, 'change', 'changes') + ' since' : '';
+      if (r.state === 'empty') {
+        line.textContent = 'Nothing to back up yet';
+        line.removeAttribute('data-state');
+      } else if (r.state === 'never') {
+        line.textContent = 'Never';
+        line.setAttribute('data-state', 'warn');
+      } else {
+        line.textContent = Backup.agoText(r.days) + since;
+        if (r.state === 'due') { line.setAttribute('data-state', 'warn'); }
+        else { line.removeAttribute('data-state'); }
+      }
+      $('backup-due').hidden = !(r.state === 'never' || r.state === 'due');
+      $('backup-due-text').textContent = r.state === 'never'
+        ? 'This device has never been backed up. If it is lost or the app is deleted, everything is gone. Tap Backup below.'
+        : 'The last backup was ' + Backup.agoText(r.days) + ' and ' + plural(r.changes, 'thing has', 'things have') +
+          ' changed since. Tap Backup below.';
+    }).catch(function () {
+      $('last-backup').textContent = 'Could not be read';
+      $('last-backup').setAttribute('data-state', 'warn');
+    });
+  }
+
   function refresh() {
+    showBackupReminder();
     return Till.counts().then(function (c) {
       ['products', 'batches', 'sales', 'saleLines'].forEach(function (key) {
         var el = $('n-' + key);
@@ -2628,6 +2664,18 @@
      Kept in memory only. */
   var backupFile = null;
   var backupUrl = null;
+  var backupMeta = null;
+
+  /* Called once the file has been handed over. A failure to remember is
+     shown, but the backup itself is still fine. */
+  function noteBackup(how) {
+    if (!backupMeta) { return; }
+    var meta = { fileName: backupFile ? backupFile.name : '', how: how,
+      counts: backupMeta.counts, salesKip: backupMeta.salesKip };
+    Till.saveBackupNote(meta).catch(function (err) {
+      say('bk-msg', 'bad', 'The file was handed over, but the app could not remember the backup time: ' + errText(err));
+    });
+  }
 
   /* The iPad (including iPads that say they are a Mac). Only there does
      "Save the file" use the share sheet; Windows downloads instead. */
@@ -2648,6 +2696,7 @@
 
   function clearBackupFile() {
     backupFile = null;
+    backupMeta = null;
     if (backupUrl) { URL.revokeObjectURL(backupUrl); backupUrl = null; }
     $('bk-share').hidden = true;
     $('bk-download').hidden = true;
@@ -2657,7 +2706,7 @@
     ['products', 'batches', 'sales', 'saleLines', 'removals'].forEach(function (t) {
       $('bk-' + t).textContent = c ? String(c[t]) : '–';
     });
-    $('bk-settings').textContent = c ? (c.settings ? 'Yes' : 'Not set yet') : '–';
+    $('bk-settings').textContent = c ? (c.shop ? 'Yes' : 'Not set yet') : '–';
     $('bk-kip').textContent = c ? Till.formatKip(kip) : '–';
     $('bk-file').textContent = fileText || '–';
   }
@@ -2683,7 +2732,7 @@
     $('bk-make').disabled = true;
     var now = new Date();
     Till.readAll().then(function (tables) {
-      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8c', now: now });
+      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8d', now: now });
       var text = Backup.toText(backup);
       Backup.proveText(text, backup);
       var name = Backup.fileName(now);
@@ -2692,7 +2741,10 @@
       backupUrl = URL.createObjectURL(blob);
 
       $('bk-heading').textContent = 'In this backup';
-      showBackupCounts(backup.counts, backup.salesKip, name + ' \u00B7 ' + Backup.sizeText(blob.size));
+      backupMeta = { counts: backup.counts, salesKip: backup.salesKip };
+      var shown = { shop: backup.data.settings.some(function (r) { return r && r.key === 'shop'; }) };
+      Object.keys(backup.counts).forEach(function (k) { if (k !== 'settings') { shown[k] = backup.counts[k]; } });
+      showBackupCounts(shown, backup.salesKip, name + ' \u00B7 ' + Backup.sizeText(blob.size));
 
       var share = canShareFile(backupFile);
       $('bk-share').hidden = !share;
@@ -2713,6 +2765,7 @@
     if (!backupFile) { return; }
     navigator.share({ files: [backupFile], title: backupFile.name }).then(function () {
       say('bk-msg', 'good', 'The file was handed over. Check it arrived where you chose (for example in the Files app).');
+      noteBackup('share');
     }).catch(function (err) {
       if (err && err.name === 'AbortError') {
         say('bk-msg', 'bad', 'Not saved: the share sheet was closed. Tap Save the file again.');
@@ -2732,6 +2785,7 @@
     a.click();
     document.body.removeChild(a);
     say('bk-msg', 'good', 'Download started: ' + backupFile.name + '. Check your Downloads folder.');
+    noteBackup('download');
   });
 
   $('bk-back').addEventListener('click', function () {

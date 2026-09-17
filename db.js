@@ -4,7 +4,8 @@
    stock earliest-expiry first (no change to the tables). 6d added the
    removals table: stock taken out with a reason. 8a added reading
    everything at once for a backup (no change to the tables). 8c added
-   loading a backup into an empty till.
+   loading a backup into an empty till. 8d remembers when the last backup
+   was made (a settings row, no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -1169,6 +1170,36 @@
     });
   }
 
+  /* ---------- backup reminder (8d) ---------- */
+
+  /* Remembers that a backup was just handed over, then reads it back.
+     Kept as one settings row, key 'backup'. */
+  function saveBackupNote(info) {
+    var now = new Date();
+    var note = {
+      key: 'backup',
+      at: now.toISOString(),
+      date: localDate(now),
+      fileName: String((info && info.fileName) || ''),
+      how: String((info && info.how) || ''),
+      counts: (info && info.counts) || null,
+      salesKip: info && Number.isSafeInteger(info.salesKip) ? info.salesKip : null
+    };
+    return put('settings', note).then(function () {
+      return get('settings', 'backup');
+    }).then(function (saved) {
+      if (!saved || saved.at !== note.at) {
+        return Promise.reject(new Error('The backup time could not be remembered.'));
+      }
+      return saved;
+    });
+  }
+
+  /* The last backup note, or null if no backup was ever made here. */
+  function getBackupNote() {
+    return get('settings', 'backup');
+  }
+
   /* The shop details, or empty ones if nothing was saved yet. */
   function getShop() {
     return get('settings', 'shop').then(function (row) {
@@ -1209,6 +1240,8 @@
   global.Till = {
     DB_VERSION: DB_VERSION,
     readAll: readAll,
+    saveBackupNote: saveBackupNote,
+    getBackupNote: getBackupNote,
     restoreBlockers: restoreBlockers,
     restoreAll: restoreAll,
     undoRestore: undoRestore,
