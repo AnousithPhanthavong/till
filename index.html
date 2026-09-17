@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Baby shop till</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1F5C4A">
+<meta name="theme-color" content="#FFF8F3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Till">
@@ -13,13 +13,20 @@
 <link rel="apple-touch-icon" href="./icon-180.png">
 <style>
   :root {
-    --bg: #F2F4F1;
+    --bg: #FFF8F3;
     --card: #FFFFFF;
-    --ink: #16261F;
-    --muted: #5A6A62;
-    --line: #DDE3DE;
-    --brand: #1F5C4A;
-    --good: #2E7D63;
+    --ink: #3B2F3A;
+    --muted: #8A7884;
+    --line: #F3E3DE;
+    --brand: #D9577F;
+    --brand-dark: #B8436A;
+    --soft: #FDEEF2;
+    --mint: #2FA67A;
+    --mint-dark: #248561;
+    --mint-soft: #E4F6EE;
+    --peach-soft: #FFEFE3;
+    --pink-soft: #FDEAF0;
+    --good: #2A8A66;
     --warn: #8A6100;
     --bad: #9B2C1F;
   }
@@ -96,7 +103,7 @@
     border: 1px solid var(--line);
     flex: none;
   }
-  button.tb-menu:active { background: #E6EDE9; }
+  button.tb-menu:active { background: var(--soft); }
   .tb-dot {
     position: absolute;
     top: 6px; right: 6px;
@@ -113,33 +120,108 @@
   }
 
   /* ---------- the menu (was Home) ---------- */
-  button.bigsell { font-size: 24px; min-height: 72px; margin-bottom: 22px; }
+  .lede:empty { display: none; }
+  .ico { width: 26px; height: 26px; flex: none; }
+  .menu-top {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  @media (max-width: 700px) { .menu-top { grid-template-columns: 1fr; } }
+  button.bigsell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    font-size: 28px;
+    min-height: 96px;
+    margin: 0;
+    border-radius: 22px;
+    background: var(--mint);
+    box-shadow: 0 6px 16px rgba(47, 166, 122, 0.25);
+  }
+  button.bigsell:active { background: var(--mint-dark); }
+  button.bigsell .ico { width: 36px; height: 36px; }
+  .todaycard {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 14px 20px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
+  }
+  .todaycard .lbl { font-size: 15px; color: var(--muted); }
+  .todaycard .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .groups {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     gap: 16px;
     margin-bottom: 22px;
+    align-items: start;
   }
+  .group {
+    border-radius: 22px;
+    padding: 16px 16px 6px;
+  }
+  .group.mint { background: var(--mint-soft); }
+  .group.peach { background: var(--peach-soft); }
+  .group.pink { background: var(--pink-soft); }
   .group h2 {
-    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-    margin: 0 0 8px 4px;
+    color: var(--ink);
+    margin: 0 0 12px 4px;
   }
+  .group h2 .ico {
+    width: 40px; height: 40px;
+    padding: 8px;
+    border-radius: 12px;
+    background: #fff;
+  }
+  .group.mint h2 .ico { color: var(--mint); }
+  .group.peach h2 .ico { color: #E07B3F; }
+  .group.pink h2 .ico { color: var(--brand); }
   button.tile {
     display: block;
     text-align: left;
     background: var(--card);
     color: var(--ink);
-    border: 1px solid var(--line);
+    border: 0;
     border-radius: 14px;
     padding: 14px 18px;
     margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(120, 60, 80, 0.08);
   }
-  button.tile:active { background: #EDF2EE; }
-  button.tile .sub { display: block; font-size: 14px; font-weight: 400; color: var(--muted); }
+  button.tile::after { content: '\203A'; float: right; color: var(--muted); font-weight: 400; }
+  button.tile:active { filter: brightness(0.96); }
+  /* softer warning boxes on the menu, like the reference picture */
+  #screen-home .panel.alert {
+    border: 0;
+    background: #FDECEC;
+    box-shadow: none;
+  }
+  #screen-home .panel.alert.soon-only { background: #FFF3DA; }
+  #screen-home .panel.alert h2 { font-size: 18px; padding-top: 14px; }
+  #screen-home .panel.alert h2::before { content: '\26A0\FE0E  '; }
+  #screen-home .panel.alert .row { border-top: 0; padding-top: 4px; }
+  #screen-home .panel.alert button.item { background: transparent; border-top: 1px solid rgba(0,0,0,0.06); }
+  #cart-buttons { display: flex; gap: 12px; padding-bottom: 14px; }
+  #cart-buttons[hidden] { display: none; }
+  #cart-buttons button { width: auto; min-width: 9rem; margin: 0; }
+  #cart-buttons .quiet { background: #fff; color: var(--ink); }
+  details.devinfo { margin-bottom: 22px; }
+  details.devinfo summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 15px;
+    padding: 6px 4px 12px;
+  }
 
   h1 {
     font-size: 30px;
@@ -156,9 +238,10 @@
   .panel {
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 18px;
     overflow: hidden;
     margin-bottom: 22px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
   }
   .panel h2 {
     font-size: 15px;
@@ -208,7 +291,7 @@
     margin: 0;
     width: 100%;
   }
-  button.item:active { background: #EDF2EE; }
+  button.item:active { background: var(--soft); }
   button.item .chev { color: var(--muted); font-weight: 400; margin-left: 2px; }
 
   .empty { padding: 16px 18px 20px; color: var(--muted); font-size: 16px; }
@@ -261,7 +344,7 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  button:active { background: #17473A; }
+  button:active { background: var(--brand-dark); }
   button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
   button.quiet {
     background: transparent;
@@ -274,7 +357,7 @@
     color: var(--brand);
     border: 1px solid var(--line);
   }
-  button.secondary:active { background: #E6EDE9; }
+  button.secondary:active { background: var(--soft); }
   button[disabled] { opacity: 0.5; cursor: default; }
 
   /* the sell screen search box */
@@ -326,7 +409,7 @@
     color: var(--brand);
     font-size: 20px;
   }
-  .totalbar .pay:active { background: #E6EDE9; }
+  .totalbar .pay:active { background: var(--soft); }
 
   /* the Pay screen */
   .choices { display: flex; gap: 12px; margin-bottom: 12px; }
@@ -360,7 +443,7 @@
     color: var(--muted);
   }
   .change .big { display: block; font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .change[data-state="ok"] { background: #E3F1EB; color: var(--good); }
+  .change[data-state="ok"] { background: var(--mint-soft); color: var(--good); }
   .change[data-state="short"], .change[data-state="tooLarge"] { background: #F6EAE8; color: var(--bad); }
   .change .warn { display: block; font-size: 15px; font-weight: 600; color: var(--warn); margin-top: 4px; }
   .quick { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 16px; }
@@ -409,7 +492,7 @@
     padding: 18px;
     margin: 0 0 16px;
     border-radius: 16px;
-    background: #E3F1EB;
+    background: var(--mint-soft);
     color: var(--good);
     font-size: 18px;
   }
@@ -572,19 +655,18 @@
     <h1 id="verdict">Checking…</h1>
     <p class="lede" id="lede">Reading what is saved on this device.</p>
 
-    <button id="go-sell" class="bigsell">Sell</button>
+    <div class="menu-top">
+      <button id="go-sell" class="bigsell"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.5L21 8H6"/></svg>Sell</button>
+      <div class="todaycard"><span class="lbl">Today</span><span class="v" id="today-sales">–</span></div>
+    </div>
 
     <section class="panel alert soon-only" id="cart-panel" hidden>
       <h2 id="cart-heading" style="color: var(--warn)">Unfinished sale</h2>
       <div class="row"><span id="cart-text"></span></div>
       <div class="btnpad" id="cart-buttons">
-        <button id="cart-continue">Continue this sale</button>
-        <button id="cart-discard" class="quiet">Discard it</button>
+        <button id="cart-continue">Continue</button>
+        <button id="cart-discard" class="quiet">Discard</button>
       </div>
-    </section>
-
-    <section class="panel">
-      <div class="row"><span>Today</span><span class="v" id="today-sales">–</span></div>
     </section>
 
     <section class="panel alert soon-only" id="backup-due" hidden>
@@ -598,23 +680,25 @@
     </section>
 
     <div class="groups">
-      <section class="group">
-        <h2>Stock</h2>
-        <button id="go-products" class="tile">Products<span class="sub">Add, change, deliveries, remove stock</span></button>
+      <section class="group mint">
+        <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Stock</h2>
+        <button id="go-products" class="tile">Products</button>
       </section>
-      <section class="group">
-        <h2>Reports</h2>
-        <button id="go-history" class="tile">Sales history<span class="sub">Each day and its receipts</span></button>
-        <button id="go-turnover" class="tile">Turnover by month<span class="sub">Last 12 months</span></button>
-        <button id="go-gaps" class="tile">Stock gaps and removals<span class="sub">Sold with no stock on record</span></button>
+      <section class="group peach">
+        <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>Reports</h2>
+        <button id="go-history" class="tile">Sales history</button>
+        <button id="go-turnover" class="tile">Turnover</button>
+        <button id="go-gaps" class="tile">Stock gaps</button>
       </section>
-      <section class="group">
-        <h2>Shop</h2>
-        <button id="go-backup" class="tile">Backup<span class="sub">Save a copy, restore, start fresh</span></button>
-        <button id="go-shop" class="tile">Shop details<span class="sub">Name, phone, bottom line of receipts</span></button>
+      <section class="group pink">
+        <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l2-5h14l2 5"/><path d="M3 9h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0"/><path d="M5 12v8h14v-8"/><path d="M10 20v-5h4v5"/></svg>Shop</h2>
+        <button id="go-backup" class="tile">Backup</button>
+        <button id="go-shop" class="tile">Shop details</button>
       </section>
     </div>
 
+    <details class="devinfo">
+      <summary>Device details</summary>
     <section class="panel">
       <h2>Saved on this device</h2>
       <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
@@ -623,6 +707,8 @@
       <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
       <div class="row"><span>Last backup</span><span class="v" id="last-backup">–</span></div>
     </section>
+
+    </details>
 
   </section>
 
@@ -1215,7 +1301,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Layout build 10a-1';
+  var BUILD = 'Layout build 10a-1b';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2146,11 +2232,11 @@
       }
       $('backup-due').hidden = !(r.state === 'never' || r.state === 'due' || r.state === 'fresh');
       $('backup-due-text').textContent = r.state === 'fresh'
-        ? 'You started fresh. Your older backup files still hold the test sales, so make a new backup now. Tap Backup below.'
+        ? 'You started fresh. Make a new backup now (Shop \u203A Backup).'
         : r.state === 'never'
-        ? 'This device has never been backed up. If it is lost or the app is deleted, everything is gone. Tap Backup below.'
-        : 'The last backup was ' + Backup.agoText(r.days) + ' and ' + plural(r.changes, 'thing has', 'things have') +
-          ' changed since. Tap Backup below.';
+        ? 'Never backed up. If this device is lost, everything is gone. Tap Shop \u203A Backup.'
+        : 'Last backup ' + Backup.agoText(r.days) + ', ' + plural(r.changes, 'change', 'changes') +
+          ' since. Tap Shop \u203A Backup.';
     }).catch(function () {
       $('last-backup').textContent = 'Could not be read';
       $('last-backup').setAttribute('data-state', 'warn');
@@ -2166,8 +2252,7 @@
         var c = rec.copy.cart;
         $('cart-heading').textContent = 'Unfinished sale';
         $('cart-text').textContent = plural(Sell.cartCount(c), 'item', 'items') + ' \u00B7 ' +
-          Till.formatKip(Sell.cartTotal(c)) + ' \u00B7 last changed ' + whenText(rec.copy.savedAt) +
-          '. Nothing has been sold yet.';
+          Till.formatKip(Sell.cartTotal(c)) + ' \u00B7 ' + whenText(rec.copy.savedAt) + '. Not sold yet.';
       } else if (rec.state === 'saved') {
         $('cart-heading').textContent = 'Last sale was saved';
         $('cart-text').textContent = 'Receipt no. ' + rec.sale.number + ' (' +
@@ -2213,7 +2298,7 @@
         $('lede').textContent = 'Tap Products, then Add product.';
       } else {
         $('verdict').textContent = 'Ready to sell';
-        $('lede').textContent = 'Tap Sell to start a sale.';
+        $('lede').textContent = '';
       }
 
       return Till.getAll('sales');
