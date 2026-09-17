@@ -8,6 +8,9 @@
    was made (a settings row, no change to the tables). 9a keeps a copy of
    the cart in progress in the browser's localStorage (not a table, and not
    part of backups: it is not business data, only a sale not yet made).
+   9d start fresh: clears test sales, deliveries and removals before
+   opening, keeps products and shop details (a settings row, key 'fresh',
+   locks it; no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -1275,7 +1278,165 @@
     }
   }
 
+  /* ---------- start fresh before opening (9d) ----------
+     Removes all test sales, sale lines, deliveries and removals, keeping
+     the products and the shop details. Used once, just before opening.
+     Afterwards a settings row, key 'fresh', remembers it and locks it. */
+
+  var FRESH_TABLES = ['sales', 'saleLines', 'batches', 'removals'];
+  var FRESH_WORDS = 'START FRESH';
+  var FRESH_BACKUP_MINUTES = 10;
+  /* Tables whose counts must be the same as in the last backup. Settings is
+     left out: saving the backup note itself adds a settings row. */
+  var FRESH_SAME_AS_BACKUP = ['products', 'batches', 'sales', 'saleLines', 'removals'];
+
+  /* Why start fresh may not run now, or null if it may. Reads nothing.
+     backupNote: the 'backup' settings row (or null)
+     freshNote:  the 'fresh' settings row (or null)
+     counts:     { products, batches, sales, saleLines, removals } now
+     now:        a Date */
+  function freshProblem(backupNote, freshNote, counts, now) {
+    if (freshNote) {
+      return 'This till was already started fresh on ' + String(freshNote.date || '') + '.';
+    }
+    var at = backupNote && typeof backupNote.at === 'string' ? Date.parse(backupNote.at) : NaN;
+    if (isNaN(at)) {
+      return 'Make a backup first.';
+    }
+    var ageMs = now.getTime() - at;
+    if (ageMs > FRESH_BACKUP_MINUTES * 60000 || ageMs < -60000) {
+      return 'Make a new backup first (the last one is more than ' + FRESH_BACKUP_MINUTES + ' minutes old).';
+    }
+    var was = backupNote.counts || {};
+    var changed = FRESH_SAME_AS_BACKUP.some(function (t) { return was[t] !== counts[t]; });
+    if (changed) {
+      return 'Something changed after the last backup. Make a new backup first.';
+    }
+    var nothing = FRESH_TABLES.every(function (t) { return counts[t] === 0; });
+    if (nothing) {
+      return 'There is nothing to remove.';
+    }
+    return null;
+  }
+
+  /* The 'fresh' settings row, or null if start fresh was never used here. */
+  function getFreshNote() {
+    return get('settings', 'fresh');
+  }
+
+  /* What the Start fresh section needs to show. Never changes anything.
+     Resolves { counts, backupNote, freshNote, problem } */
+  function freshStatus() {
+    return readAll().then(function (all) {
+      var counts = {};
+      FRESH_SAME_AS_BACKUP.forEach(function (t) { counts[t] = all[t].length; });
+      var backupNote = null, freshNote = null;
+      all.settings.forEach(function (r) {
+        if (r && r.key === 'backup') { backupNote = r; }
+        if (r && r.key === 'fresh') { freshNote = r; }
+      });
+      return {
+        counts: counts,
+        backupNote: backupNote,
+        freshNote: freshNote,
+        problem: freshProblem(backupNote, freshNote, counts, new Date())
+      };
+    });
+  }
+
+  /* Does it. typedWords must be START FRESH (spaces around are ignored).
+     Everything is checked again inside the same all-or-nothing save, so
+     nothing can slip in between the check and the clearing. Then the
+     result is read back and proven. Resolves { removed, products }. */
+  function startFresh(typedWords) {
+    if (String(typedWords || '').trim() !== FRESH_WORDS) {
+      return Promise.reject(new Error('Type ' + FRESH_WORDS + ' in capital letters to go ahead.'));
+    }
+    var names = ['products', 'settings'].concat(FRESH_TABLES);
+    var now = new Date();
+    var shopBefore = null;
+    var removed = null;
+    var productCount = null;
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(names, 'readwrite');
+        var refused = null;
+        var counts = {};
+        var notes = {};
+        var waiting = FRESH_SAME_AS_BACKUP.length + 1;
+
+        function oneDone() {
+          waiting -= 1;
+          if (waiting > 0 || refused) { return; }
+          var problem = freshProblem(notes.backup || null, notes.fresh || null, counts, now);
+          if (problem) {
+            refused = new Error(problem + ' Nothing was removed.');
+            t.abort();
+            return;
+          }
+          shopBefore = notes.shop || null;
+          productCount = counts.products;
+          removed = {};
+          FRESH_TABLES.forEach(function (name) {
+            removed[name] = counts[name];
+            t.objectStore(name).clear();
+          });
+          t.objectStore('settings').put({
+            key: 'fresh',
+            at: now.toISOString(),
+            date: localDate(now),
+            removed: removed,
+            products: productCount,
+            backupFile: String(notes.backup.fileName || '')
+          });
+        }
+
+        FRESH_SAME_AS_BACKUP.forEach(function (name) {
+          t.objectStore(name).count().onsuccess = function (e) {
+            counts[name] = e.target.result;
+            oneDone();
+          };
+        });
+        t.objectStore('settings').getAll().onsuccess = function (e) {
+          e.target.result.forEach(function (r) { if (r && r.key) { notes[r.key] = r; } });
+          oneDone();
+        };
+
+        t.oncomplete = function () { resolve(true); };
+        t.onerror = function () {};
+        t.onabort = function () {
+          reject(refused || new Error('Start fresh could not finish (' +
+            String(t.error && t.error.message ? t.error.message : 'cancelled') +
+            '). Nothing was removed.'));
+        };
+      });
+    }).then(function () {
+      dropCart();
+      return readAll();
+    }).then(function (after) {
+      var left = FRESH_TABLES.filter(function (name) { return after[name].length !== 0; });
+      var shopAfter = null, fresh = null;
+      after.settings.forEach(function (r) {
+        if (r.key === 'shop') { shopAfter = r; }
+        if (r.key === 'fresh') { fresh = r; }
+      });
+      var shopSame = JSON.stringify(shopAfter) === JSON.stringify(shopBefore);
+      if (left.length || after.products.length !== productCount || !shopSame || !fresh) {
+        return Promise.reject(new Error('Start fresh did not finish cleanly. Do not sell. ' +
+          'Your backup from a few minutes ago still has everything.'));
+      }
+      return { removed: removed, products: productCount };
+    });
+  }
+
   global.Till = {
+    FRESH_WORDS: FRESH_WORDS,
+    FRESH_BACKUP_MINUTES: FRESH_BACKUP_MINUTES,
+    freshProblem: freshProblem,
+    getFreshNote: getFreshNote,
+    freshStatus: freshStatus,
+    startFresh: startFresh,
     keepCartText: keepCartText,
     keptCartText: keptCartText,
     dropCart: dropCart,
