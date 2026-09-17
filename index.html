@@ -46,9 +46,10 @@
       calc(env(safe-area-inset-left) + 20px);
   }
   /* Each screen keeps its narrow column; the menu may use more width. */
-  main { max-width: 60rem; margin: 0 auto; }
+  main { max-width: 72rem; margin: 0 auto; }
   main > section, footer { max-width: 32rem; margin-left: auto; margin-right: auto; }
   main > #screen-home { max-width: 60rem; }
+  main > #screen-sell { max-width: 72rem; }
 
   /* ---------- the bar across the top of every screen (10a) ---------- */
   .topbar {
@@ -631,6 +632,176 @@
   .check input[type="radio"] { accent-color: var(--brand); }
   .item .moved { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+  /* ---------- the sell screen, two columns (10a-2) ---------- */
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sellgrid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .sell-col {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
+  }
+  #screen-sell .search { margin-bottom: 6px; }
+  #screen-sell .search::placeholder { color: var(--muted); }
+  #s-lede { margin: 0 4px 10px; font-size: 14px; }
+  #screen-sell .msg { margin: 0 4px 10px; }
+  .listhead { font-size: 15px; font-weight: 600; color: var(--muted); margin: 4px 4px 8px; }
+  #screen-sell .empty { padding: 14px 4px; }
+
+  /* one product found */
+  #s-results { display: flex; flex-direction: column; gap: 8px; }
+  #s-results button.item {
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+  .initial {
+    width: 48px; height: 48px;
+    flex: none;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    background: var(--pink-soft);
+    color: var(--brand-dark);
+  }
+  .initial[data-tone="1"] { background: var(--mint-soft); color: var(--mint-dark); }
+  .initial[data-tone="2"] { background: var(--peach-soft); color: #B4551F; }
+  #s-results .who { flex: 1; }
+  #s-results .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .addchip {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brand-dark);
+    background: var(--pink-soft);
+    border-radius: 10px;
+    padding: 3px 12px;
+  }
+
+  /* the cart column */
+  .sell-right {
+    position: sticky;
+    top: calc(env(safe-area-inset-top) + 84px);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - env(safe-area-inset-top) - 100px);
+  }
+  .carthead { display: flex; justify-content: space-between; align-items: center; margin: 0 4px 8px; }
+  .carthead h2 { font-size: 20px; font-weight: 700; margin: 0; }
+  button.linkish {
+    width: auto;
+    min-height: 40px;
+    margin: 0;
+    padding: 6px 10px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 16px;
+    text-decoration: underline;
+  }
+  button.linkish:active { background: var(--soft); }
+  .strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FFF3DA;
+    color: var(--warn);
+    border-radius: 14px;
+    padding: 6px 6px 6px 14px;
+    margin-bottom: 10px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .strip[hidden] { display: none; }
+  .strip span { flex: 1; }
+  .strip button.linkish { color: var(--warn); font-weight: 600; }
+  #s-cart { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+  #s-cart .cartline {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  #s-cart .cartline .controls { margin-top: 8px; }
+  #s-cart .cartline .controls button.secondary { color: var(--ink); background: var(--bg); border: 0; }
+  #s-cart .cartline .controls .each { flex: 1; font-size: 15px; color: var(--muted); white-space: nowrap; }
+  #s-cart .cartline .controls .remove { margin-left: 0; border: 0; text-decoration: underline; font-weight: 400; padding: 8px 6px; }
+  #s-cart .cartline .stockwarn {
+    display: inline-block;
+    margin: 8px 0 0;
+    padding: 3px 10px;
+    border-radius: 8px;
+    background: #FFF3DA;
+    font-size: 14px;
+  }
+  #s-cart .cartline .stockwarn[data-state="bad"] { background: #FDECEC; }
+  .paybox { border-top: 2px dashed var(--line); padding-top: 10px; margin-top: 4px; }
+  .paybox .labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 16px; }
+  .paybox .sum {
+    display: block;
+    text-align: right;
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  button.paybig {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 10px 0 0;
+    min-height: 80px;
+    font-size: 30px;
+    letter-spacing: 0.06em;
+    border-radius: 20px;
+    background: var(--mint);
+    box-shadow: 0 6px 16px rgba(47, 166, 122, 0.25);
+  }
+  button.paybig:active { background: var(--mint-dark); }
+  button.paybig .ico { width: 34px; height: 34px; }
+  button.paybig[hidden] { display: none; }
+
+  /* iPad upright and narrow windows: one column, total and PAY fixed at the bottom */
+  @media (max-width: 899px) {
+    .sellgrid { grid-template-columns: 1fr; }
+    .sell-right { position: static; max-height: none; margin-bottom: 150px; }
+    .paybox {
+      position: fixed;
+      z-index: 9;
+      left: 0; right: 0; bottom: 0;
+      margin: 0;
+      background: var(--card);
+      border-top: 1px solid var(--line);
+      box-shadow: 0 -4px 14px rgba(120, 60, 80, 0.08);
+      padding:
+        10px
+        calc(env(safe-area-inset-right) + 20px)
+        calc(env(safe-area-inset-bottom) + 10px)
+        calc(env(safe-area-inset-left) + 20px);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      column-gap: 16px;
+    }
+    #screen-sell[hidden] .paybox { display: none; }
+    .paybox .labels { grid-column: 1; }
+    .paybox .labels span:last-child { display: none; }
+    .paybox .sum { grid-column: 1; text-align: left; font-size: 32px; }
+    button.paybig { grid-column: 2; grid-row: 1 / span 2; margin: 0; width: auto; min-width: 11rem; min-height: 68px; }
+  }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -715,39 +886,40 @@
   <!-- ====================== SELL SCREEN ===================== -->
   <section id="screen-sell" hidden>
 
-    <h1>Sell</h1>
-    <p class="lede" id="s-lede">Type part of a name or a barcode.</p>
+    <div class="sellgrid">
+      <div class="sell-col sell-left">
+        <label for="s-search" class="sr">Find a product</label>
+        <input id="s-search" class="search" type="text" autocomplete="off"
+          autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search"
+          placeholder="Scan a barcode or type a name">
+        <p class="note" id="s-lede">Reading products…</p>
+        <p class="msg" id="s-msg" hidden></p>
+        <div class="listhead" id="s-heading">Matches</div>
+        <div id="s-results">
+          <div class="empty">Start typing to see products.</div>
+        </div>
+      </div>
 
-    <div class="totalbar">
-      <span class="left">
-        <span class="count" id="s-count">Cart is empty</span>
-        <span class="sum" id="s-total">0 \u20AD</span>
-      </span>
-      <button type="button" class="pay" id="s-pay" hidden>Pay</button>
+      <div class="sell-col sell-right">
+        <div class="strip" id="s-strip" hidden>
+          <span id="s-strip-text">Unfinished sale brought back</span>
+          <button type="button" class="linkish" id="s-strip-discard">Discard</button>
+        </div>
+        <p class="msg" id="s-keep" hidden></p>
+        <div class="carthead">
+          <h2>Cart</h2>
+          <button type="button" class="linkish" id="s-clear" hidden>Clear</button>
+        </div>
+        <div id="s-cart">
+          <div class="empty">Cart is empty. Scan or tap a product to add it.</div>
+        </div>
+        <div class="paybox">
+          <div class="labels"><span id="s-count">Cart is empty</span><span>Total</span></div>
+          <span class="sum" id="s-total">0 &#8365;</span>
+          <button type="button" class="paybig" id="s-pay" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>PAY</button>
+        </div>
+      </div>
     </div>
-    <p class="msg" id="s-msg" hidden></p>
-    <p class="msg" id="s-keep" hidden></p>
-
-    <label for="s-search" class="note" style="display:block;margin:0 0 6px">Find a product</label>
-    <input id="s-search" class="search" type="text" autocomplete="off"
-      autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-
-    <section class="panel">
-      <h2 id="s-heading">Matches</h2>
-      <div id="s-results">
-        <div class="empty">Start typing to see products.</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <h2>Cart</h2>
-      <div id="s-cart">
-        <div class="empty">Nothing in the cart yet. Tap a product above to add it.</div>
-      </div>
-    </section>
-
-    <button id="s-clear" class="quiet" hidden>Clear cart</button>
-    <button id="s-back" class="secondary">Back to menu</button>
 
   </section>
 
@@ -1301,7 +1473,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Layout build 10a-1b';
+  var BUILD = 'Sell look build 10a-2';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -1475,6 +1647,10 @@
     return sellStock[productId] || { usable: 0, expired: 0 };
   }
 
+  /* True while the cart on screen is one brought back after the app
+     closed. Shows the strip above the cart until the cart is emptied. */
+  var broughtBack = false;
+
   function openSell() {
     show('sell');
     $('s-search').value = '';
@@ -1506,10 +1682,12 @@
         var left = known.dropped.length
           ? ' Left out, no longer on sale: ' + known.dropped.join(', ') + '.'
           : '';
-        say('s-msg', 'warn', cart.lines.length
-          ? 'Unfinished sale brought back: ' + plural(Sell.cartCount(cart), 'item', 'items') +
-            '. Tap Clear cart if you do not want it.' + left
-          : 'The unfinished sale had nothing that is still on sale.' + left);
+        if (cart.lines.length) {
+          broughtBack = true;
+          $('s-strip-text').textContent = 'Unfinished sale brought back.' + left;
+        } else {
+          say('s-msg', 'warn', 'The unfinished sale had nothing that is still on sale.' + left);
+        }
       } else if (rec.state === 'saved') {
         say('s-msg', 'good', 'Receipt no. ' + rec.sale.number +
           ' was already saved before the app closed. Nothing to finish.');
@@ -1525,6 +1703,20 @@
       $('s-lede').textContent = 'Products could not be read: ' +
         String(err && err.message ? err.message : err);
     });
+  }
+
+  /* The first letter of a name, for the coloured square in its place
+     of a photo. */
+  function initialOf(name) {
+    var chars = Array.from(String(name || '').trim());
+    return chars.length ? chars[0].toUpperCase() : '?';
+  }
+
+  /* One of three soft colours, always the same for the same name. */
+  function toneOf(name) {
+    var n = 0;
+    Array.from(String(name || '')).forEach(function (c) { n += c.charCodeAt(0); });
+    return String(n % 3);
   }
 
   function showMatches() {
@@ -1559,11 +1751,16 @@
           : '<span class="nostock">No stock recorded</span>');
       html +=
         '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
+          '<span class="initial" data-tone="' + toneOf(p.name) + '" aria-hidden="true">' +
+            esc(initialOf(p.name)) + '</span>' +
           '<span class="who">' +
             '<span class="nm">' + esc(p.name) + '</span>' +
-            '<span class="sub">' + (p.barcode ? esc(p.barcode) : 'No barcode') + ' · ' + stockText + '</span>' +
+            '<span class="sub">' + stockText + '</span>' +
           '</span>' +
-          '<span class="price">' + Till.formatKip(p.priceKip || 0) + '</span>' +
+          '<span class="right">' +
+            '<span class="price">' + Till.formatKip(p.priceKip || 0) + '</span>' +
+            '<span class="addchip">+ Add</span>' +
+          '</span>' +
         '</button>';
     });
     $('s-results').innerHTML = html;
@@ -1575,10 +1772,12 @@
     $('s-total').textContent = Till.formatKip(Sell.cartTotal(cart));
     $('s-clear').hidden = cart.lines.length === 0;
     $('s-pay').hidden = cart.lines.length === 0;
+    if (cart.lines.length === 0) { broughtBack = false; }
+    $('s-strip').hidden = !broughtBack;
 
     if (cart.lines.length === 0) {
       $('s-cart').innerHTML =
-        '<div class="empty">Nothing in the cart yet. Tap a product above to add it.</div>';
+        '<div class="empty">Cart is empty. Scan or tap a product to add it.</div>';
       return;
     }
 
@@ -1589,21 +1788,18 @@
       var warn = '';
       if (l.qty > st.usable) {
         if (st.usable === 0 && st.expired > 0) {
-          warn = '<p class="stockwarn" data-state="bad">Only expired stock is on record. Check the date on this item before selling it.</p>';
+          warn = '<p class="stockwarn" data-state="bad">Only expired stock on record. Check the date first.</p>';
         } else if (st.usable === 0) {
-          warn = '<p class="stockwarn">No stock on record for this. It can still be sold.</p>';
+          warn = '<p class="stockwarn">No stock recorded. Can still be sold.</p>';
         } else {
           warn = '<p class="stockwarn">Only ' + st.usable.toLocaleString('en-US') +
-            ' on record. The rest will be marked as not in stock records.</p>';
+            ' on record. Can still be sold.</p>';
         }
       }
       html +=
         '<div class="cartline">' +
           '<div class="top">' +
-            '<span>' +
-              '<span class="nm"><span class="qty">' + l.qty + ' \u00D7</span> ' + esc(l.name) + '</span>' +
-              '<span class="sub">' + Till.formatKip(l.unitPriceKip) + ' each</span>' +
-            '</span>' +
+            '<span class="nm">' + esc(l.name) + '</span>' +
             '<span class="price">' + Till.formatKip(Sell.lineTotal(l)) + '</span>' +
           '</div>' + warn +
           '<div class="controls">' +
@@ -1612,6 +1808,7 @@
             '<span class="n">' + l.qty + '</span>' +
             '<button type="button" class="secondary" data-act="plus" data-id="' + id + '"' +
               ' aria-label="One more">+</button>' +
+            '<span class="each">\u00D7 ' + Till.formatKip(l.unitPriceKip) + '</span>' +
             '<button type="button" class="quiet remove" data-act="remove" data-id="' + id + '">Remove</button>' +
           '</div>' +
         '</div>';
@@ -1730,26 +1927,31 @@
     showCart();
   });
 
-  $('s-clear').addEventListener('click', function () {
-    if (!window.confirm('Take everything out of the cart?')) { return; }
+  function emptyTheCart(question, doneText) {
+    if (!window.confirm(question)) { return; }
     cart = Sell.emptyCart();
     keepCart();
     showCart();
     if (Sell.cartCount(cart) === 0 && $('s-cart').querySelector('.cartline') === null) {
-      say('s-msg', 'good', 'Cart cleared.');
+      say('s-msg', 'good', doneText);
     } else {
       say('s-msg', 'bad', 'The cart did not clear. Close the app and open it again.');
     }
+    $('s-search').focus();
+  }
+
+  $('s-clear').addEventListener('click', function () {
+    emptyTheCart('Take everything out of the cart?', 'Cart cleared.');
+  });
+  $('s-strip-discard').addEventListener('click', function () {
+    emptyTheCart('Throw away the unfinished sale? Nothing was sold, and it cannot be brought back.',
+      'Unfinished sale thrown away.');
   });
 
   $('go-sell').addEventListener('click', openSell);
   $('s-search').addEventListener('input', function () {
     say('s-msg', '', '');
     showMatches();
-  });
-  $('s-back').addEventListener('click', function () {
-    show('home');
-    refresh();
   });
 
   /* ---------- the pay screen ---------- */
@@ -3573,6 +3775,7 @@
 
   if (allCurrent()) {
     refresh();
+    openSell();
   } else {
     var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' :
       (!receiptIsCurrent() ? 'receipt.js' : (!reportIsCurrent() ? 'report.js' : 'backup.js')));
