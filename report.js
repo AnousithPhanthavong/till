@@ -5,6 +5,7 @@
 
    Step 7a: totals for each day, and the sales on one day.
    Step 7b: totals for each month, and for the last 12 months.
+   Step 7c: items sold with no stock on record, and stock removals.
 
    Only records marked as sales are counted. When voids and refunds are
    added later they will be their own kind of record, so they can never be
@@ -169,7 +170,78 @@
     return list;
   }
 
+  /* ---------- stock gaps and removals (7c) ---------- */
+
+  /* Items sold beyond the stock on record, one entry per product.
+     Only lines of proper sales count. Sales saved before stock was taken at
+     checkout have no unrecordedQty and are not looked at.
+     `batches` is used to see whether a delivery has been added since the
+     last such sale: { productId, receivedAt }.
+     Each: { productId, name, qty, saleCount, lastAt, lastDate, deliveredSince }
+     Not-yet-fixed products first, then the most recent first. */
+  function stockGaps(sales, lines, batches) {
+    var saleById = {};
+    (sales || []).forEach(function (s) {
+      if (isCountable(s)) { saleById[s.id] = s; }
+    });
+
+    var byProduct = {};
+    (lines || []).forEach(function (l) {
+      if (!l || !Number.isInteger(l.unrecordedQty) || l.unrecordedQty < 1) { return; }
+      var sale = saleById[l.saleId];
+      if (!sale) { return; }
+      var g = byProduct[l.productId];
+      if (!g) {
+        g = byProduct[l.productId] = {
+          productId: l.productId, name: String(l.name || ''), qty: 0,
+          saleCount: 0, lastAt: '', lastDate: '', deliveredSince: false, sales: {}
+        };
+      }
+      g.qty = add(g.qty, l.unrecordedQty);
+      if (!g.sales[sale.id]) { g.sales[sale.id] = true; g.saleCount += 1; }
+      if (String(sale.at) > g.lastAt) {
+        g.lastAt = String(sale.at);
+        g.lastDate = sale.date;
+        g.name = String(l.name || g.name);
+      }
+    });
+
+    (batches || []).forEach(function (b) {
+      var g = b && byProduct[b.productId];
+      if (g && String(b.receivedAt || '') > g.lastAt) { g.deliveredSince = true; }
+    });
+
+    return Object.keys(byProduct).map(function (id) {
+      var g = byProduct[id];
+      delete g.sales;
+      return g;
+    }).sort(function (a, b) {
+      if (a.deliveredSince !== b.deliveredSince) { return a.deliveredSince ? 1 : -1; }
+      if (a.lastAt !== b.lastAt) { return a.lastAt < b.lastAt ? 1 : -1; }
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  /* All stock removals, newest first, and how many items per reason.
+     Returns { list, byReason: { damaged: n, ... }, totalQty } */
+  function removalSummary(removals) {
+    var list = (removals || []).filter(function (r) {
+      return r && r.type === 'removal' && Number.isInteger(r.qty) && r.qty > 0;
+    }).slice().sort(function (a, b) {
+      return a.at < b.at ? 1 : (a.at > b.at ? -1 : 0);
+    });
+    var byReason = {};
+    var totalQty = 0;
+    list.forEach(function (r) {
+      byReason[r.reason] = add(byReason[r.reason] || 0, r.qty);
+      totalQty = add(totalQty, r.qty);
+    });
+    return { list: list, byReason: byReason, totalQty: totalQty };
+  }
+
   global.Report = {
+    stockGaps: stockGaps,
+    removalSummary: removalSummary,
     yearStart: yearStart,
     lastTwelveMonths: lastTwelveMonths,
     monthTotals: monthTotals,

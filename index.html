@@ -630,6 +630,7 @@
     <p class="msg" id="h-msg" hidden></p>
 
     <button id="h-turnover">Turnover by month</button>
+    <button id="h-gaps" class="secondary">Stock gaps and removals</button>
 
     <section class="panel">
       <h2>Each day, newest first</h2>
@@ -663,6 +664,27 @@
     </section>
 
     <button id="tv-back" class="secondary">Back to sales history</button>
+
+  </section>
+
+  <!-- ============== STOCK GAPS AND REMOVALS SCREEN ========== -->
+  <section id="screen-gaps" hidden>
+
+    <h1>Stock gaps and removals</h1>
+    <p class="lede" id="gp-lede">Reading…</p>
+
+    <section class="panel">
+      <h2>Sold with no stock on record</h2>
+      <div id="gp-list"><div class="empty">Reading…</div></div>
+    </section>
+    <p class="note">These deliveries were probably never entered. Tap a product, count what is on the shelf, and add that number as a delivery. Sales before 16/09/2026 were not checked.</p>
+
+    <section class="panel">
+      <h2 id="gp-rm-heading">Removed from stock, newest first</h2>
+      <div id="gp-rm-list"><div class="empty">Reading…</div></div>
+    </section>
+
+    <button id="gp-back" class="secondary">Back to sales history</button>
 
   </section>
 
@@ -940,7 +962,7 @@
   }
 
   function reportIsCurrent() {
-    return typeof Report !== 'undefined' && typeof Report.monthTotals === 'function';
+    return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent();
@@ -955,7 +977,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'History build 7b';
+      'History build 7c';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -974,6 +996,7 @@
     $('screen-history').hidden = (which !== 'history');
     $('screen-day').hidden = (which !== 'day');
     $('screen-turnover').hidden = (which !== 'turnover');
+    $('screen-gaps').hidden = (which !== 'gaps');
     window.scrollTo(0, 0);
   }
 
@@ -1884,7 +1907,7 @@
 
   var stockProduct = null;   /* the product whose stock is open */
   var deliveryId = null;     /* made when the screen opens, so Save saves once */
-  var stockFrom = 'products'; /* where Back goes: 'products' or 'home' */
+  var stockFrom = 'products'; /* where Back goes: 'products', 'home' or 'gaps' */
 
   $('f-stock').addEventListener('click', function () {
     if (!editingId) { return; }
@@ -1899,7 +1922,8 @@
   });
 
   function openStock(product) {
-    $('st-back').textContent = stockFrom === 'home' ? 'Back to home' : 'Back to products';
+    $('st-back').textContent = stockFrom === 'home' ? 'Back to home' :
+      (stockFrom === 'gaps' ? 'Back to stock gaps' : 'Back to products');
     stockProduct = product;
     deliveryId = Till.newBatchId();
     $('st-name').textContent = product.name;
@@ -2007,6 +2031,11 @@
     if (stockFrom === 'home') {
       show('home');
       refresh();
+      return;
+    }
+    if (stockFrom === 'gaps') {
+      show('gaps');
+      loadGaps();
       return;
     }
     say('p-msg', '', '');
@@ -2365,6 +2394,96 @@
   $('tv-back').addEventListener('click', function () {
     show('history');
     loadHistory();
+  });
+
+  /* ---------- stock gaps and removals ---------- */
+
+  var REMOVALS_SHOWN = 50;
+
+  function loadGaps() {
+    $('gp-lede').textContent = 'Reading…';
+    $('gp-list').innerHTML = '<div class="empty">Reading…</div>';
+    $('gp-rm-list').innerHTML = '<div class="empty">Reading…</div>';
+    $('gp-rm-heading').textContent = 'Removed from stock, newest first';
+
+    return Promise.all([
+      Till.getAll('sales'), Till.getAll('saleLines'), Till.getAll('batches'),
+      Till.getAll('removals'), Till.getAll('products')
+    ]).then(function (got) {
+      var gaps = Report.stockGaps(got[0], got[1], got[2]);
+      var rm = Report.removalSummary(got[3]);
+      var names = {};
+      got[4].forEach(function (p) { names[p.id] = p.name; });
+
+      var open = gaps.filter(function (g) { return !g.deliveredSince; }).length;
+      $('gp-lede').textContent = open
+        ? plural(open, 'product needs', 'products need') + ' a delivery entered.'
+        : 'No stock gaps to fix.';
+
+      var html = '';
+      gaps.forEach(function (g) {
+        var sub = plural(g.qty, 'item', 'items') + ' in ' + plural(g.saleCount, 'sale', 'sales') +
+          ' \u00B7 last ' + Receipt.dateText(g.lastDate);
+        if (g.deliveredSince) { sub += ' \u00B7 <span class="instock">delivery added since</span>'; }
+        html +=
+          '<button type="button" class="item" data-id="' + esc(g.productId) + '">' +
+            '<span class="who"><span class="nm">' + esc(names[g.productId] || g.name) + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="price">' + (g.deliveredSince ? '' : '<span class="nostock">Check</span> ') +
+              '<span class="chev">\u203A</span></span>' +
+          '</button>';
+      });
+      $('gp-list').innerHTML = html ||
+        '<div class="empty">Every item sold had stock on record.</div>';
+
+      if (rm.list.length) {
+        var parts = Object.keys(Till.REMOVAL_REASONS)
+          .filter(function (k) { return rm.byReason[k]; })
+          .map(function (k) { return Till.REMOVAL_REASONS[k] + ' ' + rm.byReason[k].toLocaleString('en-US'); });
+        $('gp-rm-heading').textContent = plural(rm.totalQty, 'item', 'items') + ' removed: ' + parts.join(' \u00B7 ');
+      }
+      var rows = '';
+      rm.list.slice(0, REMOVALS_SHOWN).forEach(function (r) {
+        var sub = (Till.REMOVAL_REASONS[r.reason] || esc(r.reason)) + ' \u00B7 ' + Receipt.dateText(r.date);
+        if (r.note) { sub += ' \u00B7 ' + esc(r.note); }
+        if (r.lot) { sub += ' \u00B7 Lot ' + esc(r.lot); }
+        rows +=
+          '<div class="item">' +
+            '<span class="who"><span class="nm">' + esc(names[r.productId] || '(product no longer saved)') + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="moved">\u2212' + r.qty.toLocaleString('en-US') + '</span>' +
+          '</div>';
+      });
+      if (rm.list.length > REMOVALS_SHOWN) {
+        rows += '<div class="empty">and ' + (rm.list.length - REMOVALS_SHOWN) + ' older.</div>';
+      }
+      $('gp-rm-list').innerHTML = rows || '<div class="empty">Nothing removed yet.</div>';
+    }).catch(function (err) {
+      $('gp-lede').textContent = 'The stock records could not be read.';
+      $('gp-list').innerHTML = '<div class="empty">' + esc(errText(err)) + '</div>';
+      $('gp-rm-list').innerHTML = '';
+    });
+  }
+
+  $('h-gaps').addEventListener('click', function () {
+    show('gaps');
+    loadGaps();
+  });
+
+  $('gp-back').addEventListener('click', function () {
+    show('history');
+    loadHistory();
+  });
+
+  $('gp-list').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    Till.get('products', row.getAttribute('data-id')).then(function (product) {
+      if (!product) { loadGaps(); return; }
+      editingId = product.id;
+      stockFrom = 'gaps';
+      openStock(product);
+    });
   });
 
   /* ---------- shop details ---------- */
