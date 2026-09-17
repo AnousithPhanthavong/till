@@ -929,8 +929,8 @@
   <!-- ================== CHECK / LOAD A BACKUP =============== -->
   <section id="screen-load" hidden>
 
-    <h1 id="ld-title">Check a backup file</h1>
-    <p class="lede">Pick a backup file to see what is inside and whether it is complete. Checking never changes anything on this device.</p>
+    <h1 id="ld-title">Check or load a backup</h1>
+    <p class="lede">Pick a backup file to see what is inside and whether it is complete. Checking never changes anything. Loading is only offered on an empty till, so nothing can be overwritten.</p>
 
     <input id="ld-file" type="file" accept=".json,application/json" hidden>
     <button id="ld-pick">Choose a backup file</button>
@@ -958,6 +958,13 @@
       <h2 style="color: var(--warn)">Worth knowing (not a problem)</h2>
       <div id="ld-notes"></div>
     </section>
+
+    <section class="panel" id="ld-restore-panel" hidden>
+      <h2>Load into this device</h2>
+      <div class="row"><span id="ld-restore-text"></span></div>
+    </section>
+    <button id="ld-restore" hidden>Restore this backup</button>
+    <button id="ld-home" hidden>Go to home</button>
 
     <button id="ld-back" class="secondary">Back to backup</button>
 
@@ -1022,7 +1029,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.readAll === 'function';
+    return typeof Till !== 'undefined' && typeof Till.restoreAll === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -1035,7 +1042,7 @@
     return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
   function backupIsCurrent() {
-    return typeof Backup !== 'undefined' && typeof Backup.check === 'function';
+    return typeof Backup !== 'undefined' && typeof Backup.differences === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
@@ -1051,7 +1058,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Backup build 8b';
+      'Backup build 8c';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -2676,7 +2683,7 @@
     $('bk-make').disabled = true;
     var now = new Date();
     Till.readAll().then(function (tables) {
-      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8b', now: now });
+      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8c', now: now });
       var text = Backup.toText(backup);
       Backup.proveText(text, backup);
       var name = Backup.fileName(now);
@@ -2735,7 +2742,19 @@
 
   /* ---------- check a backup file (8b) ---------- */
 
+  /* The file that passed the check, waiting to be restored. Memory only. */
+  var loadedData = null;
+  var loadedInfo = null;
+
   function resetLoad() {
+    loadedData = null;
+    loadedInfo = null;
+    $('ld-restore-panel').hidden = true;
+    $('ld-restore').hidden = true;
+    $('ld-restore').disabled = false;
+    $('ld-home').hidden = true;
+    $('ld-pick').hidden = false;
+    $('ld-back').hidden = false;
     say('ld-msg', '', '');
     $('ld-panel').hidden = true;
     $('ld-problems-panel').hidden = true;
@@ -2822,11 +2841,99 @@
       say('ld-msg', r.ok ? 'good' : 'bad', r.ok
         ? 'This backup is complete and can be trusted.'
         : 'This file cannot be used. Nothing on this device was changed.');
+
+      if (!r.ok) { return; }
+      loadedData = JSON.parse(text).data;
+      loadedInfo = r.info;
+      return offerRestore();
     }).catch(function (err) {
       say('ld-msg', 'bad', errText(err));
     }).then(function () {
       $('ld-pick').disabled = false;
     });
+  });
+
+  /* Shows whether this device can take the backup. */
+  function offerRestore() {
+    return Till.restoreBlockers().then(function (b) {
+      $('ld-restore-panel').hidden = false;
+      if (b.total > 0) {
+        $('ld-restore-text').textContent = 'This device already has ' +
+          [plural(b.products, 'product', 'products'), plural(b.batches, 'delivery', 'deliveries'),
+           plural(b.sales, 'sale', 'sales'), plural(b.removals, 'removal', 'removals')].join(', ') +
+          '. A backup can only be loaded into an empty till, so nothing here can be overwritten.';
+        $('ld-restore').hidden = true;
+      } else {
+        $('ld-restore-text').textContent = 'This device is empty. Restoring puts everything from this file onto it, including the shop details.';
+        $('ld-restore').hidden = false;
+      }
+    });
+  }
+
+  function lastReceiptNo(sales) {
+    var n = 0;
+    sales.forEach(function (s) {
+      if (s && s.type === 'sale' && Number.isInteger(s.number) && s.number > n) { n = s.number; }
+    });
+    return n;
+  }
+
+  $('ld-restore').addEventListener('click', function () {
+    if (!loadedData) { return; }
+    var data = loadedData;
+    var info = loadedInfo;
+    if (!window.confirm('Load this backup into this device?\n\n' +
+        plural(info.counts.products, 'product', 'products') + ', ' +
+        plural(info.counts.sales, 'sale', 'sales') + ', made ' +
+        Receipt.dateText(info.createdLocal.slice(0, 10)) + '.')) { return; }
+
+    $('ld-restore').disabled = true;
+    $('ld-pick').disabled = true;
+    $('ld-back').hidden = true;
+    say('ld-msg', 'good', 'Loading… do not close the app.');
+
+    var written = false;
+    Till.restoreAll(data).then(function () {
+      written = true;
+      return Till.readAll();
+    }).then(function (back) {
+      var diff = Backup.differences(data, back);
+      if (diff.length) {
+        return Till.undoRestore().then(function () {
+          throw new Error('The loaded ' + diff.join(', ') + ' did not match the file, so the device was emptied again. Nothing was kept. Try again.');
+        }, function () {
+          throw new Error('The loaded ' + diff.join(', ') + ' did not match the file, and the device could not be emptied again. Do not sell on this device. Send me this message.');
+        });
+      }
+      Till.keepDataSafe();
+      var last = lastReceiptNo(back.sales);
+      loadedData = null;
+      $('ld-problems-panel').hidden = true;
+      $('ld-notes-panel').hidden = true;
+      $('ld-restore').hidden = true;
+      $('ld-pick').hidden = true;
+      $('ld-home').hidden = false;
+      $('ld-restore-text').textContent = 'Every record was read back and matches the file.';
+      say('ld-msg', 'good', 'Backup restored and checked: ' +
+        plural(back.products.length, 'product', 'products') + ', ' +
+        plural(back.sales.length, 'sale', 'sales') + ', ' +
+        Till.formatKip(Backup.salesKip(back.sales)) + '. ' +
+        (last ? 'The next receipt will be No. ' + (last + 1) + '.' : ''));
+    }).catch(function (err) {
+      $('ld-restore').disabled = false;
+      $('ld-back').hidden = false;
+      var text = errText(err);
+      say('ld-msg', 'bad', (written || /nothing was loaded/i.test(text) ? '' : 'Nothing was loaded. ') + text);
+      if (!written) { offerRestore().catch(function () {}); }
+    }).then(function () {
+      $('ld-pick').disabled = false;
+    });
+  });
+
+  $('ld-home').addEventListener('click', function () {
+    resetLoad();
+    show('home');
+    refresh();
   });
 
   $('ld-back').addEventListener('click', function () {

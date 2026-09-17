@@ -5,6 +5,7 @@
 
    Step 8a: making the file.
    Step 8b: checking a file before it is loaded.
+   Step 8c: confirming a restore came out exactly like the file.
 
    The file is JSON: plain text laid out so that a program can read it back
    exactly. At the top is a header saying what made it, when, and how many
@@ -257,7 +258,38 @@
     return result;
   }
 
+  /* ---------- after a restore (8c) ---------- */
+
+  /* A record as text with its fields in a fixed order, so two copies of
+     the same record always give the same text. */
+  function canon(v) {
+    if (Array.isArray(v)) { return '[' + v.map(canon).join(',') + ']'; }
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().filter(function (k) { return v[k] !== undefined; })
+        .map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v === undefined ? null : v);
+  }
+
+  /* Compares what was read back from the device with the file, record by
+     record. Returns a list of tables that differ (empty = identical). */
+  function differences(fileData, deviceData) {
+    var out = [];
+    TABLES.forEach(function (t) {
+      var keyName = t === 'settings' ? 'key' : 'id';
+      var a = (fileData && fileData[t]) || [];
+      var b = (deviceData && deviceData[t]) || [];
+      if (a.length !== b.length) { out.push(LABELS[t]); return; }
+      var byKey = {};
+      b.forEach(function (r) { byKey[r[keyName]] = canon(r); });
+      var same = a.every(function (r) { return byKey[r[keyName]] === canon(r); });
+      if (!same) { out.push(LABELS[t]); }
+    });
+    return out;
+  }
+
   global.Backup = {
+    differences: differences,
     MAX_FILE_BYTES: MAX_FILE_BYTES,
     check: check,
     FORMAT: FORMAT,

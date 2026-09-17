@@ -3,7 +3,8 @@
    Step 6a added stock deliveries, 6b expiry warnings, 6c selling takes
    stock earliest-expiry first (no change to the tables). 6d added the
    removals table: stock taken out with a reason. 8a added reading
-   everything at once for a backup (no change to the tables).
+   everything at once for a backup (no change to the tables). 8c added
+   loading a backup into an empty till.
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -1074,6 +1075,100 @@
     }
   }
 
+  /* ---------- restore (8c) ---------- */
+
+  var RESTORE_MUST_BE_EMPTY = ['products', 'batches', 'sales', 'saleLines', 'removals'];
+
+  /* How many records this device holds in the tables a restore fills.
+     A restore is only allowed when all of these are 0. */
+  function restoreBlockers() {
+    return Promise.all(RESTORE_MUST_BE_EMPTY.map(function (t) { return count(t); }))
+      .then(function (n) {
+        var out = {};
+        RESTORE_MUST_BE_EMPTY.forEach(function (t, i) { out[t] = n[i]; });
+        out.total = n.reduce(function (a, b) { return a + b; }, 0);
+        return out;
+      });
+  }
+
+  /* Loads a checked backup into an EMPTY till, all or nothing.
+     data: { products: [...], batches: [...], ... } from a backup file that
+     passed Backup.check. Shop details in the file replace the ones here.
+     - Inside the same save, it first confirms the tables are empty. If not,
+       nothing is written.
+     - Records are added, never put over, so an existing record can never
+       be replaced.
+     Resolves when the save is complete. Does not read back; the screen
+     does that with readAll and Backup.sameData. */
+  function restoreAll(data) {
+    for (var i = 0; i < ALL_TABLES.length; i++) {
+      if (!data || !Array.isArray(data[ALL_TABLES[i]])) {
+        return Promise.reject(new Error('The backup is missing its ' + ALL_TABLES[i] + '. Nothing was loaded.'));
+      }
+    }
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(ALL_TABLES, 'readwrite');
+        var refused = null;
+        var checked = 0;
+
+        function writeAll() {
+          var settings = t.objectStore('settings');
+          settings.clear();
+          data.settings.forEach(function (r) { settings.put(r); });
+          RESTORE_MUST_BE_EMPTY.forEach(function (name) {
+            var store = t.objectStore(name);
+            data[name].forEach(function (r) { store.add(r); });
+          });
+        }
+
+        RESTORE_MUST_BE_EMPTY.forEach(function (name) {
+          t.objectStore(name).count().onsuccess = function (e) {
+            if (e.target.result > 0 && !refused) {
+              refused = new Error('This device already has data, so nothing was loaded.');
+              t.abort();
+              return;
+            }
+            checked += 1;
+            if (checked === RESTORE_MUST_BE_EMPTY.length && !refused) { writeAll(); }
+          };
+        });
+
+        t.oncomplete = function () { resolve(true); };
+        /* Any record that fails cancels the whole save; onabort reports it.
+           (Never call preventDefault here: that would let the save carry on
+           without the failed record.) */
+        t.onerror = function () {};
+        t.onabort = function () {
+          reject(refused || new Error('The backup could not be loaded (' +
+            String(t.error && t.error.message ? t.error.message : 'cancelled') +
+            '). Nothing was loaded.'));
+        };
+      });
+    });
+  }
+
+  /* After a failed restore: empties the five tables again and the shop
+     details, then proves they are empty. Only ever called on a device that
+     was empty before the restore. */
+  function undoRestore() {
+    return wipe().then(function () {
+      return open().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var t = db.transaction('settings', 'readwrite');
+          t.objectStore('settings').clear();
+          t.oncomplete = function () { resolve(true); };
+          t.onerror = function () { reject(t.error); };
+        });
+      });
+    }).then(restoreBlockers).then(function (left) {
+      if (left.total !== 0) {
+        return Promise.reject(new Error('The device could not be emptied again.'));
+      }
+      return true;
+    });
+  }
+
   /* The shop details, or empty ones if nothing was saved yet. */
   function getShop() {
     return get('settings', 'shop').then(function (row) {
@@ -1114,6 +1209,9 @@
   global.Till = {
     DB_VERSION: DB_VERSION,
     readAll: readAll,
+    restoreBlockers: restoreBlockers,
+    restoreAll: restoreAll,
+    undoRestore: undoRestore,
     keepDataSafe: keepDataSafe,
     SHOP_LIMITS: SHOP_LIMITS,
     getShop: getShop,
