@@ -921,7 +921,45 @@
     <p class="note">On the iPad, Save the file opens the share sheet: choose <b>Save to Files</b> (iCloud Drive is best), or send it to yourself on LINE or email. On the Windows computer the file goes to Downloads; copy it to a USB stick or Google Drive. The file holds all your sales, so keep it private.</p>
     <p class="note" id="bk-keep"></p>
 
+    <button id="bk-load" class="secondary">Check or load a backup file</button>
     <button id="bk-back" class="secondary">Back to home</button>
+
+  </section>
+
+  <!-- ================== CHECK / LOAD A BACKUP =============== -->
+  <section id="screen-load" hidden>
+
+    <h1 id="ld-title">Check a backup file</h1>
+    <p class="lede">Pick a backup file to see what is inside and whether it is complete. Checking never changes anything on this device.</p>
+
+    <input id="ld-file" type="file" accept=".json,application/json" hidden>
+    <button id="ld-pick">Choose a backup file</button>
+
+    <p class="msg" id="ld-msg" hidden></p>
+
+    <section class="panel" id="ld-panel" hidden>
+      <h2 id="ld-name">In this file</h2>
+      <div class="row"><span>Made</span><span class="v" id="ld-made">–</span></div>
+      <div class="row"><span>Shop name</span><span class="v" id="ld-shop">–</span></div>
+      <div class="row"><span>Products</span><span class="v" id="ld-products">–</span></div>
+      <div class="row"><span>Deliveries</span><span class="v" id="ld-batches">–</span></div>
+      <div class="row"><span>Sales</span><span class="v" id="ld-sales">–</span></div>
+      <div class="row"><span>Sale lines</span><span class="v" id="ld-saleLines">–</span></div>
+      <div class="row"><span>Removals</span><span class="v" id="ld-removals">–</span></div>
+      <div class="row"><span>All sales added up</span><span class="v" id="ld-kip">–</span></div>
+    </section>
+
+    <section class="panel alert" id="ld-problems-panel" hidden>
+      <h2>Why it cannot be used</h2>
+      <div id="ld-problems"></div>
+    </section>
+
+    <section class="panel alert soon-only" id="ld-notes-panel" hidden>
+      <h2 style="color: var(--warn)">Worth knowing (not a problem)</h2>
+      <div id="ld-notes"></div>
+    </section>
+
+    <button id="ld-back" class="secondary">Back to backup</button>
 
   </section>
 
@@ -997,7 +1035,7 @@
     return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
   function backupIsCurrent() {
-    return typeof Backup !== 'undefined' && typeof Backup.proveText === 'function';
+    return typeof Backup !== 'undefined' && typeof Backup.check === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
@@ -1013,7 +1051,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Backup build 8a';
+      'Backup build 8b';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -1034,6 +1072,7 @@
     $('screen-turnover').hidden = (which !== 'turnover');
     $('screen-gaps').hidden = (which !== 'gaps');
     $('screen-backup').hidden = (which !== 'backup');
+    $('screen-load').hidden = (which !== 'load');
     window.scrollTo(0, 0);
   }
 
@@ -2637,7 +2676,7 @@
     $('bk-make').disabled = true;
     var now = new Date();
     Till.readAll().then(function (tables) {
-      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8a', now: now });
+      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8b', now: now });
       var text = Backup.toText(backup);
       Backup.proveText(text, backup);
       var name = Backup.fileName(now);
@@ -2692,6 +2731,107 @@
     clearBackupFile();
     show('home');
     refresh();
+  });
+
+  /* ---------- check a backup file (8b) ---------- */
+
+  function resetLoad() {
+    say('ld-msg', '', '');
+    $('ld-panel').hidden = true;
+    $('ld-problems-panel').hidden = true;
+    $('ld-notes-panel').hidden = true;
+    $('ld-problems').innerHTML = '';
+    $('ld-notes').innerHTML = '';
+    $('ld-pick').disabled = false;
+  }
+
+  function listHtml(items) {
+    var shown = items.slice(0, 6);
+    var html = shown.map(function (t) { return '<div class="row"><span>' + esc(t) + '</span></div>'; }).join('');
+    if (items.length > shown.length) {
+      html += '<div class="row"><span>and ' + (items.length - shown.length) + ' more</span></div>';
+    }
+    return html;
+  }
+
+  /* Reads a picked file as text. FileReader works on older iPads too. */
+  function readFileText(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result || '')); };
+      r.onerror = function () { reject(new Error('The file could not be opened. Try picking it again.')); };
+      r.readAsText(file, 'utf-8');
+    });
+  }
+
+  $('bk-load').addEventListener('click', function () {
+    clearBackupFile();
+    resetLoad();
+    show('load');
+  });
+
+  $('ld-pick').addEventListener('click', function () {
+    $('ld-file').value = '';   /* so the same file can be picked twice */
+    $('ld-file').click();
+  });
+
+  $('ld-file').addEventListener('change', function () {
+    var file = $('ld-file').files && $('ld-file').files[0];
+    if (!file) { return; }
+    resetLoad();
+    if (file.size > Backup.MAX_FILE_BYTES) {
+      say('ld-msg', 'bad', 'This file is far too large to be a till backup.');
+      return;
+    }
+    $('ld-pick').disabled = true;
+    say('ld-msg', 'good', 'Checking ' + file.name + '…');
+    readFileText(file).then(function (text) {
+      var r = Backup.check(text, Till.DB_VERSION);
+
+      if (r.info) {
+        var c = r.info.counts;
+        $('ld-name').textContent = file.name;
+        $('ld-made').textContent = r.info.createdLocal
+          ? Receipt.dateText(r.info.createdLocal.slice(0, 10)) + '  ' + r.info.createdLocal.slice(11)
+          : 'unknown';
+        $('ld-shop').textContent = r.info.shopName || 'not set';
+        ['products', 'batches', 'sales', 'saleLines', 'removals'].forEach(function (t) {
+          $('ld-' + t).textContent = String(c[t]);
+        });
+        $('ld-kip').textContent = r.info.salesKip === null ? '–' : Till.formatKip(r.info.salesKip);
+        $('ld-panel').hidden = false;
+
+        /* Same rule the sales history uses for sales it cannot count. */
+        if (r.ok && typeof Report !== 'undefined') {
+          var wrong = 0;
+          ((JSON.parse(text).data || {}).sales || []).forEach(function (s) {
+            if (s && s.type === 'sale' && !Report.isCountable(s)) { wrong += 1; }
+          });
+          if (wrong) { r.notes.push(plural(wrong, 'sale looks wrong and is', 'sales look wrong and are') + ' left out of totals, as in Sales history.'); }
+        }
+      }
+
+      if (r.problems.length) {
+        $('ld-problems').innerHTML = listHtml(r.problems);
+        $('ld-problems-panel').hidden = false;
+      }
+      if (r.notes.length) {
+        $('ld-notes').innerHTML = listHtml(r.notes);
+        $('ld-notes-panel').hidden = false;
+      }
+      say('ld-msg', r.ok ? 'good' : 'bad', r.ok
+        ? 'This backup is complete and can be trusted.'
+        : 'This file cannot be used. Nothing on this device was changed.');
+    }).catch(function (err) {
+      say('ld-msg', 'bad', errText(err));
+    }).then(function () {
+      $('ld-pick').disabled = false;
+    });
+  });
+
+  $('ld-back').addEventListener('click', function () {
+    resetLoad();
+    $('go-backup').click();
   });
 
   /* Removes only what the old "Save a test sale" button made.

@@ -4,6 +4,7 @@
    into the text of one file. That is what lets it be checked automatically.
 
    Step 8a: making the file.
+   Step 8b: checking a file before it is loaded.
 
    The file is JSON: plain text laid out so that a program can read it back
    exactly. At the top is a header saying what made it, when, and how many
@@ -112,7 +113,153 @@
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
+  /* ---------- checking a file (8b) ---------- */
+
+  /* Largest file the till will try to read. A small shop's backup stays
+     far below this for many years. */
+  var MAX_FILE_BYTES = 50 * 1024 * 1024;
+
+  var LABELS = {
+    products: 'products', batches: 'deliveries', sales: 'sales',
+    saleLines: 'sale lines', settings: 'settings', removals: 'removals'
+  };
+
+  /* Money and quantities: any field whose name ends in Kip, or starts with
+     qty, or is qty. Empty (null) is allowed; decimals and minus are not. */
+  function isNumberField(key) {
+    return /Kip$/.test(key) || /^qty/.test(key);
+  }
+  function many(n, one, more) { return n + ' ' + (n === 1 ? one : more); }
+
+  function badNumber(v) {
+    return v !== null && v !== undefined &&
+      !(typeof v === 'number' && Number.isSafeInteger(v) && v >= 0);
+  }
+
+  /* Reads the text of a backup file and says whether it can be trusted.
+     Changes nothing and reads nothing from the device.
+     currentDbVersion: the version of the database on this device.
+     Returns { ok, problems: [...], notes: [...], info }
+       problems — real damage; the file must not be loaded.
+       notes    — odd but harmless; loading is still safe. */
+  function check(text, currentDbVersion) {
+    var problems = [];
+    var notes = [];
+    var result = { ok: false, problems: problems, notes: notes, info: null };
+
+    var f;
+    try {
+      f = JSON.parse(String(text || ''));
+    } catch (e) {
+      problems.push('This file cannot be read. It may be cut off or not a backup at all.');
+      return result;
+    }
+    if (!f || typeof f !== 'object' || f.format !== FORMAT) {
+      problems.push('This is not a till backup file.');
+      return result;
+    }
+    if (!Number.isInteger(f.formatVersion) || f.formatVersion > FORMAT_VERSION) {
+      problems.push('This backup was made by a newer version of the app. Update this device first.');
+      return result;
+    }
+    if (!Number.isInteger(f.dbVersion) || f.dbVersion > currentDbVersion) {
+      problems.push('This backup was made by a newer version of the app. Update this device first.');
+      return result;
+    }
+    var data = f.data;
+    var missing = TABLES.filter(function (t) { return !data || !Array.isArray(data[t]); });
+    if (missing.length) {
+      problems.push('This backup is missing its ' + missing.map(function (t) { return LABELS[t]; }).join(', ') + '.');
+      return result;
+    }
+
+    var shop = data.settings.filter(function (r) { return r && r.key === 'shop'; })[0];
+    result.info = {
+      createdLocal: String(f.createdLocal || ''),
+      createdAt: String(f.createdAt || ''),
+      build: String(f.build || ''),
+      dbVersion: f.dbVersion,
+      counts: countsOf(data),
+      salesKip: null,
+      shopName: shop ? String(shop.name || '') : ''
+    };
+
+    /* The header must match what is inside. */
+    var counts = f.counts || {};
+    TABLES.forEach(function (t) {
+      if (counts[t] !== data[t].length) {
+        problems.push('The ' + LABELS[t] + ' do not match the file\u2019s own count (' +
+          data[t].length + ' inside, ' + counts[t] + ' expected). The file is damaged.');
+      }
+    });
+
+    /* Every record: a proper id, no id twice, whole-number money. */
+    var ids = {};
+    TABLES.forEach(function (t) {
+      var keyName = t === 'settings' ? 'key' : 'id';
+      var seen = {};
+      var noId = 0, twice = 0, badNum = 0;
+      data[t].forEach(function (r) {
+        if (!r || typeof r !== 'object' || typeof r[keyName] !== 'string' || !r[keyName]) {
+          noId += 1;
+          return;
+        }
+        if (seen[r[keyName]]) { twice += 1; }
+        seen[r[keyName]] = r;
+        Object.keys(r).forEach(function (k) {
+          if (isNumberField(k) && badNumber(r[k])) { badNum += 1; }
+        });
+      });
+      ids[t] = seen;
+      if (noId) { problems.push(noId + ' ' + LABELS[t] + ' have no proper id. The file is damaged.'); }
+      if (twice) { problems.push(twice + ' ' + LABELS[t] + ' appear twice. The file is damaged.'); }
+      if (badNum) { problems.push(badNum + ' amounts in the ' + LABELS[t] + ' are not whole numbers. The file is damaged.'); }
+    });
+
+    var kip = null;
+    try { kip = salesKip(data.sales); } catch (e) { problems.push(e.message); }
+    result.info.salesKip = kip;
+    if (kip !== null && f.salesKip !== kip) {
+      problems.push('The sales money does not match the file\u2019s own total. The file is damaged.');
+    }
+
+    /* Odd but harmless: leftovers from the old test data, and similar. */
+    var n = 0;
+    data.saleLines.forEach(function (l) { if (l && !ids.sales[l.saleId]) { n += 1; } });
+    if (n) { notes.push(many(n, 'sale line belongs', 'sale lines belong') + ' to no sale in the file. Totals ignore this.'); }
+
+    n = 0;
+    data.batches.forEach(function (b) { if (b && !ids.products[b.productId]) { n += 1; } });
+    if (n) { notes.push(many(n, 'delivery belongs', 'deliveries belong') + ' to a product that is no longer saved.'); }
+
+    n = 0;
+    data.removals.forEach(function (r) { if (r && !ids.batches[r.batchId]) { n += 1; } });
+    if (n) { notes.push(many(n, 'removal belongs', 'removals belong') + ' to a delivery that is no longer saved (likely the old test product).'); }
+
+    n = 0;
+    data.batches.forEach(function (b) {
+      if (b && Number.isInteger(b.qtyRemaining) && Number.isInteger(b.qtyReceived) &&
+          b.qtyRemaining > b.qtyReceived) { n += 1; }
+    });
+    if (n) { notes.push(many(n, 'delivery shows', 'deliveries show') + ' more left than was received.'); }
+
+    var numbers = {};
+    n = 0;
+    data.sales.forEach(function (s) {
+      if (s && s.type === 'sale' && Number.isInteger(s.number)) {
+        if (numbers[s.number]) { n += 1; }
+        numbers[s.number] = true;
+      }
+    });
+    if (n) { notes.push(many(n, 'receipt number is', 'receipt numbers are') + ' used twice.'); }
+
+    result.ok = problems.length === 0;
+    return result;
+  }
+
   global.Backup = {
+    MAX_FILE_BYTES: MAX_FILE_BYTES,
+    check: check,
     FORMAT: FORMAT,
     FORMAT_VERSION: FORMAT_VERSION,
     TABLES: TABLES,
