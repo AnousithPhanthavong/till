@@ -2,7 +2,8 @@
    Every screen built later talks to the data through this one file.
    Step 6a added stock deliveries, 6b expiry warnings, 6c selling takes
    stock earliest-expiry first (no change to the tables). 6d added the
-   removals table: stock taken out with a reason.
+   removals table: stock taken out with a reason. 8a added reading
+   everything at once for a backup (no change to the tables).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -1033,6 +1034,46 @@
     return s.trim().replace(/\s+/g, ' ');
   }
 
+  /* ---------- backup (8a) ---------- */
+
+  var ALL_TABLES = ['products', 'batches', 'sales', 'saleLines', 'settings', 'removals'];
+
+  /* Every record of every table, read in one go. Reading all tables inside
+     one read means a sale being saved at the same moment is either fully
+     in the backup or not at all, never half. */
+  function readAll() {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(ALL_TABLES, 'readonly');
+        var out = {};
+        ALL_TABLES.forEach(function (name) {
+          t.objectStore(name).getAll().onsuccess = function (e) {
+            out[name] = e.target.result;
+          };
+        });
+        t.oncomplete = function () { resolve(out); };
+        t.onerror = function () { reject(t.error); };
+        t.onabort = function () { reject(t.error || new Error('Reading was cancelled')); };
+      });
+    });
+  }
+
+  /* Asks the browser not to clear this app's data when the device runs
+     short of space. Resolves 'yes', 'no' or 'unknown' (older browsers
+     cannot be asked). Never fails. */
+  function keepDataSafe() {
+    try {
+      if (!navigator.storage || typeof navigator.storage.persist !== 'function') {
+        return Promise.resolve('unknown');
+      }
+      return navigator.storage.persist().then(function (granted) {
+        return granted ? 'yes' : 'no';
+      }).catch(function () { return 'unknown'; });
+    } catch (e) {
+      return Promise.resolve('unknown');
+    }
+  }
+
   /* The shop details, or empty ones if nothing was saved yet. */
   function getShop() {
     return get('settings', 'shop').then(function (row) {
@@ -1071,6 +1112,9 @@
   }
 
   global.Till = {
+    DB_VERSION: DB_VERSION,
+    readAll: readAll,
+    keepDataSafe: keepDataSafe,
     SHOP_LIMITS: SHOP_LIMITS,
     getShop: getShop,
     saveShop: saveShop,

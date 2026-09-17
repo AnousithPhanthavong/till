@@ -481,6 +481,7 @@
     <button id="go-history" class="secondary">Sales history</button>
     <button id="go-products" class="secondary">Products</button>
     <button id="go-shop" class="secondary">Shop details</button>
+    <button id="go-backup" class="secondary">Backup</button>
 
     <button id="cleanup" class="quiet" hidden>Remove test data</button>
 
@@ -894,6 +895,36 @@
 
   </section>
 
+  <!-- ======================= BACKUP ======================== -->
+  <section id="screen-backup" hidden>
+
+    <h1>Backup</h1>
+    <p class="lede">A backup is one file holding everything on this device: products, deliveries, sales, removals and shop details. If this device is lost or the app is deleted, the backup is the only copy.</p>
+    <p class="msg" id="bk-msg" hidden></p>
+
+    <section class="panel">
+      <h2 id="bk-heading">What goes in</h2>
+      <div class="row"><span>Products</span><span class="v" id="bk-products">–</span></div>
+      <div class="row"><span>Deliveries</span><span class="v" id="bk-batches">–</span></div>
+      <div class="row"><span>Sales</span><span class="v" id="bk-sales">–</span></div>
+      <div class="row"><span>Sale lines</span><span class="v" id="bk-saleLines">–</span></div>
+      <div class="row"><span>Removals</span><span class="v" id="bk-removals">–</span></div>
+      <div class="row"><span>Shop details</span><span class="v" id="bk-settings">–</span></div>
+      <div class="row"><span>All sales added up</span><span class="v" id="bk-kip">–</span></div>
+      <div class="row"><span>File</span><span class="v" id="bk-file">–</span></div>
+    </section>
+
+    <button id="bk-make">Make a backup</button>
+    <button id="bk-share" hidden>Save the file</button>
+    <button id="bk-download" class="secondary" hidden>Download the file</button>
+
+    <p class="note">On the iPad, Save the file opens the share sheet: choose <b>Save to Files</b> (iCloud Drive is best), or send it to yourself on LINE or email. On the Windows computer the file goes to Downloads; copy it to a USB stick or Google Drive. The file holds all your sales, so keep it private.</p>
+    <p class="note" id="bk-keep"></p>
+
+    <button id="bk-back" class="secondary">Back to home</button>
+
+  </section>
+
   <!-- ===================== SHOP DETAILS ===================== -->
   <section id="screen-shop" hidden>
 
@@ -935,6 +966,7 @@
 <script src="./cart.js"></script>
 <script src="./receipt.js"></script>
 <script src="./report.js"></script>
+<script src="./backup.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
 
@@ -952,7 +984,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.removeStock === 'function';
+    return typeof Till !== 'undefined' && typeof Till.readAll === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -964,8 +996,12 @@
   function reportIsCurrent() {
     return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
+  function backupIsCurrent() {
+    return typeof Backup !== 'undefined' && typeof Backup.proveText === 'function';
+  }
   function allCurrent() {
-    return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent();
+    return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
+      backupIsCurrent();
   }
 
   function showStatus() {
@@ -977,7 +1013,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'History build 7c';
+      'Backup build 8a';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -997,6 +1033,7 @@
     $('screen-day').hidden = (which !== 'day');
     $('screen-turnover').hidden = (which !== 'turnover');
     $('screen-gaps').hidden = (which !== 'gaps');
+    $('screen-backup').hidden = (which !== 'backup');
     window.scrollTo(0, 0);
   }
 
@@ -2539,6 +2576,124 @@
     });
   });
 
+  /* ---------- backup (8a) ---------- */
+
+  /* The file made by the last "Make a backup", waiting to be saved.
+     Kept in memory only. */
+  var backupFile = null;
+  var backupUrl = null;
+
+  /* The iPad (including iPads that say they are a Mac). Only there does
+     "Save the file" use the share sheet; Windows downloads instead. */
+  function isIpad() {
+    var ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+
+  function canShareFile(file) {
+    try {
+      return isIpad() && typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearBackupFile() {
+    backupFile = null;
+    if (backupUrl) { URL.revokeObjectURL(backupUrl); backupUrl = null; }
+    $('bk-share').hidden = true;
+    $('bk-download').hidden = true;
+  }
+
+  function showBackupCounts(c, kip, fileText) {
+    ['products', 'batches', 'sales', 'saleLines', 'removals'].forEach(function (t) {
+      $('bk-' + t).textContent = c ? String(c[t]) : '–';
+    });
+    $('bk-settings').textContent = c ? (c.settings ? 'Yes' : 'Not set yet') : '–';
+    $('bk-kip').textContent = c ? Till.formatKip(kip) : '–';
+    $('bk-file').textContent = fileText || '–';
+  }
+
+  $('go-backup').addEventListener('click', function () {
+    clearBackupFile();
+    say('bk-msg', '', '');
+    $('bk-heading').textContent = 'What goes in';
+    showBackupCounts(null);
+    $('bk-make').disabled = false;
+    $('bk-keep').textContent = '';
+    show('backup');
+    Till.keepDataSafe().then(function (answer) {
+      $('bk-keep').textContent = answer === 'yes'
+        ? 'This browser has agreed not to clear the till\u2019s data on its own. Backups are still needed.'
+        : 'This browser has not promised to keep the till\u2019s data. That makes regular backups even more important.';
+    });
+  });
+
+  $('bk-make').addEventListener('click', function () {
+    clearBackupFile();
+    say('bk-msg', '', '');
+    $('bk-make').disabled = true;
+    var now = new Date();
+    Till.readAll().then(function (tables) {
+      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8a', now: now });
+      var text = Backup.toText(backup);
+      Backup.proveText(text, backup);
+      var name = Backup.fileName(now);
+      var blob = new Blob([text], { type: 'application/json' });
+      backupFile = new File([blob], name, { type: 'application/json' });
+      backupUrl = URL.createObjectURL(blob);
+
+      $('bk-heading').textContent = 'In this backup';
+      showBackupCounts(backup.counts, backup.salesKip, name + ' \u00B7 ' + Backup.sizeText(blob.size));
+
+      var share = canShareFile(backupFile);
+      $('bk-share').hidden = !share;
+      $('bk-download').hidden = false;
+      $('bk-download').className = share ? 'secondary' : '';
+      say('bk-msg', 'good', 'Backup made and checked. Now ' +
+        (share ? 'tap Save the file.' : 'tap Download the file.'));
+    }).catch(function (err) {
+      showBackupCounts(null);
+      say('bk-msg', 'bad', errText(err));
+    }).then(function () {
+      $('bk-make').disabled = false;
+    });
+  });
+
+  /* Must run straight from the tap: the iPad refuses to share otherwise. */
+  $('bk-share').addEventListener('click', function () {
+    if (!backupFile) { return; }
+    navigator.share({ files: [backupFile], title: backupFile.name }).then(function () {
+      say('bk-msg', 'good', 'The file was handed over. Check it arrived where you chose (for example in the Files app).');
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') {
+        say('bk-msg', 'bad', 'Not saved: the share sheet was closed. Tap Save the file again.');
+      } else {
+        say('bk-msg', 'bad', 'The share sheet did not work (' + errText(err) + '). Try Download the file instead.');
+      }
+    });
+  });
+
+  $('bk-download').addEventListener('click', function () {
+    if (!backupFile || !backupUrl) { return; }
+    var a = document.createElement('a');
+    a.href = backupUrl;
+    a.download = backupFile.name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    say('bk-msg', 'good', 'Download started: ' + backupFile.name + '. Check your Downloads folder.');
+  });
+
+  $('bk-back').addEventListener('click', function () {
+    clearBackupFile();
+    show('home');
+    refresh();
+  });
+
   /* Removes only what the old "Save a test sale" button made.
      Real products are left alone. */
   $('cleanup').addEventListener('click', function () {
@@ -2575,7 +2730,7 @@
     refresh();
   } else {
     var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' :
-      (!receiptIsCurrent() ? 'receipt.js' : 'report.js'));
+      (!receiptIsCurrent() ? 'receipt.js' : (!reportIsCurrent() ? 'report.js' : 'backup.js')));
     $('verdict').setAttribute('data-state', 'bad');
     $('verdict').textContent = 'The app is only half updated';
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';
@@ -2583,6 +2738,7 @@
     $('go-history').disabled = true;
     $('go-products').disabled = true;
     $('go-shop').disabled = true;
+    $('go-backup').disabled = true;
     $('cleanup').hidden = true;
   }
 </script>
