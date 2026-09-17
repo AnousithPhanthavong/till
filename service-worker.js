@@ -1,7 +1,27 @@
 /* Keeps a copy of the till on the iPad so it opens with no internet.
    Change CACHE when you send a new version of the files. */
 
-var CACHE = 'till-32';
+var CACHE = 'till-33';
+
+var NAV_WAIT_MS = 4000;
+
+/* The request, or a failure if the answer takes longer than `ms`. */
+function fetchWithin(request, ms) {
+  return new Promise(function (resolve, reject) {
+    var timer = setTimeout(function () { reject(new Error('Too slow')); }, ms);
+    fetch(request).then(function (response) {
+      clearTimeout(timer);
+      resolve(response);
+    }, function (err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function savedPage() {
+  return caches.match('./index.html');
+}
 
 var FILES = [
   './',
@@ -43,11 +63,16 @@ self.addEventListener('fetch', function (event) {
 
   if (request.method !== 'GET') { return; }
 
-  // Opening the app: always fall back to the saved page.
+  // Opening the app: try the internet for at most NAV_WAIT_MS, then use the
+  // saved page. WiFi that is connected but has no internet can make a
+  // request hang for a minute or more; the till must still open at once.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(function () {
-        return caches.match('./index.html');
+      fetchWithin(request, NAV_WAIT_MS).then(function (response) {
+        if (response && response.ok) { return response; }
+        return savedPage().then(function (hit) { return hit || response; });
+      }).catch(function () {
+        return savedPage().then(function (hit) { return hit || fetch(request); });
       })
     );
     return;

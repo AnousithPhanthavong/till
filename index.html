@@ -578,6 +578,7 @@
     <section class="panel" id="qr-panel" hidden>
       <h2>QR</h2>
       <div class="qrbox">
+        <p class="msg" id="qr-offline" data-state="warn" hidden>This till has no internet. The sale still saves, but your bank app needs internet: check the money on a phone that is connected.</p>
         <p class="ask">The customer must send exactly</p>
         <p class="amount" id="qr-amount"></p>
         <ol>
@@ -1069,7 +1070,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Cart build 9a';
+  var BUILD = 'Offline build 9b';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -1541,6 +1542,7 @@
   /* Payment received works only after the box is ticked. */
   function showQr() {
     $('qr-complete').disabled = !$('qr-seen').checked;
+    $('qr-offline').hidden = navigator.onLine !== false;
   }
 
   $('qr-seen').addEventListener('change', showQr);
@@ -3155,8 +3157,8 @@
     navigator.serviceWorker.register('./service-worker.js');
   }
 
-  window.addEventListener('online', showStatus);
-  window.addEventListener('offline', showStatus);
+  window.addEventListener('online', function () { showStatus(); showQr(); });
+  window.addEventListener('offline', function () { showStatus(); showQr(); });
 
   showStatus();
   show('home');
