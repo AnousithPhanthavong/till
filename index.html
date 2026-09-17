@@ -145,6 +145,8 @@
   .msg { margin: 0 0 16px; font-size: 16px; }
   .msg[data-state="bad"] { color: var(--bad); font-weight: 600; }
   .msg[data-state="good"] { color: var(--good); font-weight: 600; }
+  .msg[data-state="warn"] { color: var(--warn); font-weight: 600; }
+  .panel .btnpad { padding: 12px 18px 0; }
 
   button {
     font: inherit;
@@ -464,6 +466,15 @@
     <h1 id="verdict">Checking…</h1>
     <p class="lede" id="lede">Reading what is saved on this device.</p>
 
+    <section class="panel alert soon-only" id="cart-panel" hidden>
+      <h2 id="cart-heading" style="color: var(--warn)">Unfinished sale</h2>
+      <div class="row"><span id="cart-text"></span></div>
+      <div class="btnpad" id="cart-buttons">
+        <button id="cart-continue">Continue this sale</button>
+        <button id="cart-discard" class="quiet">Discard it</button>
+      </div>
+    </section>
+
     <section class="panel alert" id="exp-panel" hidden>
       <h2 id="exp-heading">Expiry</h2>
       <div id="exp-list"></div>
@@ -508,6 +519,7 @@
       <button type="button" class="pay" id="s-pay" hidden>Pay</button>
     </div>
     <p class="msg" id="s-msg" hidden></p>
+    <p class="msg" id="s-keep" hidden></p>
 
     <label for="s-search" class="note" style="display:block;margin:0 0 6px">Find a product</label>
     <input id="s-search" class="search" type="text" autocomplete="off"
@@ -1036,10 +1048,10 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.saveBackupNote === 'function';
+    return typeof Till !== 'undefined' && typeof Till.keepCartText === 'function';
   }
   function cartIsCurrent() {
-    return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
+    return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
   }
   function receiptIsCurrent() {
     return typeof Receipt !== 'undefined' && typeof Receipt.shopLines === 'function';
@@ -1056,6 +1068,9 @@
       backupIsCurrent();
   }
 
+  /* The name of this version, shown at the bottom and written into backups. */
+  var BUILD = 'Cart build 9a';
+
   function showStatus() {
     var home = window.navigator.standalone === true ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -1065,7 +1080,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Backup build 8d';
+      BUILD;
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -1105,9 +1120,54 @@
      so searching as you type does not go back to the saved data each time. */
   var sellProducts = [];
 
-  /* The sale being built. Kept in memory only: it survives going Back,
-     but closing the app empties it. Nothing is saved until checkout. */
+  /* The sale being built. After every change a copy is kept on the
+     device (keepCart), so closing the app does not lose it. It is not a
+     sale: nothing is sold or taken from stock until checkout. */
   var cart = { lines: [] };
+
+  /* Writes the copy of the cart, or throws it away when the cart is empty.
+     Says so on the Sell screen if the device would not keep it. */
+  function keepCart() {
+    var ok = cart.lines.length === 0
+      ? Till.dropCart()
+      : Till.keepCartText(Sell.cartCopyText(cart, paySaleId || '', new Date()));
+    say('s-keep', 'bad', ok ? '' :
+      'This cart is not being kept on the device. If the app closes, it will be lost.');
+    return ok;
+  }
+
+  /* Looks at the kept copy after the app was opened. Resolves to
+       { state: 'none' }                nothing kept
+       { state: 'open', copy }          a sale in progress, not saved
+       { state: 'saved', sale }         it WAS saved just before closing;
+                                        the copy is thrown away
+       { state: 'unreadable' }          damaged; the copy is thrown away
+     Rejects if the saved sales could not be checked. */
+  function recoverCart() {
+    var text = Till.keptCartText();
+    if (text === null) { return Promise.resolve({ state: 'none' }); }
+    var copy = Sell.readCartCopy(text);
+    if (!copy.ok) {
+      Till.dropCart();
+      return Promise.resolve({ state: 'unreadable' });
+    }
+    if (!copy.saleId) { return Promise.resolve({ state: 'open', copy: copy }); }
+    return Till.getSale(copy.saleId).then(function (found) {
+      if (found) {
+        Till.dropCart();
+        return { state: 'saved', sale: found.sale };
+      }
+      return { state: 'open', copy: copy };
+    });
+  }
+
+  /* "at 14:32" today, otherwise "on 15/09/2026 at 14:32". */
+  function whenText(iso) {
+    var d = new Date(iso);
+    var day = Till.localDate(d);
+    return (day === Till.localDate(new Date()) ? '' : 'on ' + Receipt.dateText(day) + ' ') +
+      'at ' + timeOf(iso);
+  }
 
   /* Stock on record per product, { usable, expired }. Read when the sell
      screen opens and after each sale. Only used for showing warnings:
@@ -1140,12 +1200,40 @@
     showCart();
 
     loadSellStock();
-    Till.listProducts().then(function (rows) {
+    /* With an empty cart, a cart kept from before the app closed comes back.
+       Products are only searchable once this is settled, so nothing can be
+       added in the meantime. */
+    var recovering = cart.lines.length > 0
+      ? Promise.resolve({ state: 'none' })
+      : recoverCart().catch(function () { return { state: 'error' }; });
+    Promise.all([Till.listProducts(), recovering]).then(function (got) {
+      var rows = got[0];
+      var rec = got[1];
       sellProducts = rows;
       $('s-lede').textContent = rows.length === 0
         ? 'No products saved yet. Add some on the Products screen first.'
         : 'Type part of a name or a barcode. ' +
           plural(rows.length, 'product', 'products') + ' to search.';
+      if (rec.state === 'open' && cart.lines.length === 0) {
+        var known = Sell.keepKnownLines(rec.copy.cart, rows);
+        cart = known.cart;
+        keepCart();
+        var left = known.dropped.length
+          ? ' Left out, no longer on sale: ' + known.dropped.join(', ') + '.'
+          : '';
+        say('s-msg', 'warn', cart.lines.length
+          ? 'Unfinished sale brought back: ' + plural(Sell.cartCount(cart), 'item', 'items') +
+            '. Tap Clear cart if you do not want it.' + left
+          : 'The unfinished sale had nothing that is still on sale.' + left);
+      } else if (rec.state === 'saved') {
+        say('s-msg', 'good', 'Receipt no. ' + rec.sale.number +
+          ' was already saved before the app closed. Nothing to finish.');
+      } else if (rec.state === 'unreadable') {
+        say('s-msg', 'bad', 'An unfinished sale could not be read and was thrown away.');
+      } else if (rec.state === 'error') {
+        say('s-msg', 'bad', 'An unfinished sale could not be checked, so it was not brought back. Close the app and open it again.');
+      }
+      showCart();
       showMatches();
       $('s-search').focus();
     }).catch(function (err) {
@@ -1255,6 +1343,7 @@
       say('s-msg', 'bad', String(err && err.message ? err.message : err));
       return false;
     }
+    keepCart();
     say('s-msg', 'good', 'Added: ' + product.name);
     showCart();
     $('s-search').value = '';
@@ -1346,6 +1435,7 @@
       if (act === 'plus') { cart = Sell.changeQty(cart, id, 1); }
       if (act === 'minus') { cart = Sell.changeQty(cart, id, -1); }
       if (act === 'remove') { cart = Sell.removeLine(cart, id); }
+      keepCart();
     } catch (err) {
       say('s-msg', 'bad', String(err && err.message ? err.message : err));
       showCart();
@@ -1358,6 +1448,7 @@
   $('s-clear').addEventListener('click', function () {
     if (!window.confirm('Take everything out of the cart?')) { return; }
     cart = Sell.emptyCart();
+    keepCart();
     showCart();
     if (Sell.cartCount(cart) === 0 && $('s-cart').querySelector('.cartline') === null) {
       say('s-msg', 'good', 'Cart cleared.');
@@ -1390,6 +1481,7 @@
     }
     paySaleId = Till.newSaleId();
     payMethod = null;
+    keepCart();
 
     $('pay-count').textContent = plural(Sell.cartCount(cart), 'item', 'items');
     $('pay-total').textContent = Till.formatKip(Sell.cartTotal(cart));
@@ -1490,6 +1582,7 @@
       cart = Sell.emptyCart();
       paySaleId = null;
       payMethod = null;
+      keepCart();
       lockPay(false);
       showDone(result);
     }).catch(function (err) {
@@ -1546,6 +1639,7 @@
      Sell was opened is still in memory, so scanning works at once. */
   function newSale() {
     cart = Sell.emptyCart();
+    keepCart();
     show('sell');
     loadSellStock();
     $('s-search').value = '';
@@ -1738,6 +1832,7 @@
   $('pay-back').addEventListener('click', function () {
     paySaleId = null;
     payMethod = null;
+    keepCart();
     show('sell');
     say('s-msg', '', '');
     showCart();
@@ -1832,8 +1927,47 @@
     });
   }
 
+  /* The Unfinished sale box on Home. */
+  function showUnfinished() {
+    return recoverCart().then(function (rec) {
+      $('cart-panel').hidden = rec.state === 'none';
+      $('cart-buttons').hidden = rec.state !== 'open';
+      if (rec.state === 'open') {
+        var c = rec.copy.cart;
+        $('cart-heading').textContent = 'Unfinished sale';
+        $('cart-text').textContent = plural(Sell.cartCount(c), 'item', 'items') + ' \u00B7 ' +
+          Till.formatKip(Sell.cartTotal(c)) + ' \u00B7 last changed ' + whenText(rec.copy.savedAt) +
+          '. Nothing has been sold yet.';
+      } else if (rec.state === 'saved') {
+        $('cart-heading').textContent = 'Last sale was saved';
+        $('cart-text').textContent = 'Receipt no. ' + rec.sale.number + ' (' +
+          Till.formatKip(rec.sale.totalKip) + ') was saved before the app closed. Nothing to finish.';
+      } else if (rec.state === 'unreadable') {
+        $('cart-heading').textContent = 'Unfinished sale';
+        $('cart-text').textContent = 'An unfinished sale could not be read and was thrown away.';
+      }
+    }).catch(function () {
+      $('cart-panel').hidden = false;
+      $('cart-buttons').hidden = true;
+      $('cart-heading').textContent = 'Unfinished sale';
+      $('cart-text').textContent = 'There may be an unfinished sale, but it could not be checked. Close the app and open it again.';
+    });
+  }
+
+  $('cart-continue').addEventListener('click', openSell);
+  $('cart-discard').addEventListener('click', function () {
+    if (!window.confirm('Throw away the unfinished sale? Nothing was sold, and it cannot be brought back.')) { return; }
+    cart = Sell.emptyCart();
+    paySaleId = null;
+    if (!keepCart()) {
+      window.alert('The unfinished sale could not be thrown away. Close the app and open it again.');
+    }
+    refresh();
+  });
+
   function refresh() {
     showBackupReminder();
+    showUnfinished();
     return Till.counts().then(function (c) {
       ['products', 'batches', 'sales', 'saleLines'].forEach(function (key) {
         var el = $('n-' + key);
@@ -2732,7 +2866,7 @@
     $('bk-make').disabled = true;
     var now = new Date();
     Till.readAll().then(function (tables) {
-      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: 'Backup build 8d', now: now });
+      var backup = Backup.build(tables, { dbVersion: Till.DB_VERSION, build: BUILD, now: now });
       var text = Backup.toText(backup);
       Backup.proveText(text, backup);
       var name = Backup.fileName(now);

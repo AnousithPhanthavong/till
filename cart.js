@@ -7,6 +7,8 @@
    Step 3: changing quantities and removing lines.
    Step 4: recognising a scanned barcode.
    Step 5: working out change for cash payments.
+   Step 9a: the copy of the cart kept on the device, so a sale in
+   progress survives the app being closed.
 
    A cart is { lines: [...] }. Each line is
    { productId, name, barcode, unitPriceKip, qty }.
@@ -271,7 +273,71 @@
     return list.slice(0, 5);
   }
 
+  /* ---------- the kept copy of the cart (9a) ---------- */
+
+  var COPY_VERSION = 1;
+  var MAX_COPY_LINES = 500;
+
+  /* The cart as text to keep on the device. saleId is the id the Pay
+     screen made, or '' when Pay is not open. It lets the app tell, after
+     a restart, whether this cart was in fact already saved as a sale. */
+  function cartCopyText(cart, saleId, now) {
+    var d = now instanceof Date ? now : new Date();
+    return JSON.stringify({
+      v: COPY_VERSION,
+      savedAt: d.toISOString(),
+      saleId: typeof saleId === 'string' ? saleId : '',
+      lines: copyLines(cart)
+    });
+  }
+
+  /* Reads a kept copy back. Returns
+       { ok: true, cart, saleId, savedAt }
+       { ok: false }   the text is damaged or not a cart
+     Every line is checked the same way the cart itself would allow. */
+  function readCartCopy(text) {
+    var bad = { ok: false };
+    var c;
+    try { c = JSON.parse(String(text)); } catch (e) { return bad; }
+    if (!c || c.v !== COPY_VERSION || !Array.isArray(c.lines) ||
+        c.lines.length === 0 || c.lines.length > MAX_COPY_LINES) { return bad; }
+    if (typeof c.savedAt !== 'string' || isNaN(new Date(c.savedAt).getTime())) { return bad; }
+    if (typeof c.saleId !== 'string') { return bad; }
+    var seen = {};
+    for (var i = 0; i < c.lines.length; i++) {
+      var l = c.lines[i];
+      if (!l || typeof l.productId !== 'string' || !l.productId || seen[l.productId] ||
+          !isWholeKip(l.unitPriceKip) ||
+          !Number.isInteger(l.qty) || l.qty < 1 || l.qty > MAX_QTY) { return bad; }
+      seen[l.productId] = true;
+    }
+    var cart = { lines: copyLines(c) };
+    try { cartTotal(cart); } catch (e) { return bad; }
+    return { ok: true, cart: cart, saleId: c.saleId, savedAt: c.savedAt };
+  }
+
+  /* Leaves out lines whose product is no longer on sale (deleted or
+     hidden since). Prices stay as they were when the item was added,
+     the same as in a cart that was never closed.
+     Returns { cart, dropped: [names] }. */
+  function keepKnownLines(cart, products) {
+    var known = {};
+    (products || []).forEach(function (p) {
+      if (p && p.id && p.active !== false) { known[p.id] = true; }
+    });
+    var dropped = [];
+    var lines = copyLines(cart).filter(function (l) {
+      if (known[l.productId]) { return true; }
+      dropped.push(l.name);
+      return false;
+    });
+    return { cart: { lines: lines }, dropped: dropped };
+  }
+
   global.Sell = {
+    cartCopyText: cartCopyText,
+    readCartCopy: readCartCopy,
+    keepKnownLines: keepKnownLines,
     MAX_CASH: MAX_CASH,
     changeDue: changeDue,
     cashSuggestions: cashSuggestions,

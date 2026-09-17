@@ -5,7 +5,9 @@
    removals table: stock taken out with a reason. 8a added reading
    everything at once for a backup (no change to the tables). 8c added
    loading a backup into an empty till. 8d remembers when the last backup
-   was made (a settings row, no change to the tables).
+   was made (a settings row, no change to the tables). 9a keeps a copy of
+   the cart in progress in the browser's localStorage (not a table, and not
+   part of backups: it is not business data, only a sale not yet made).
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -1237,7 +1239,46 @@
     });
   }
 
+  /* ---------- the cart in progress (9a) ----------
+     localStorage is a small notepad the browser keeps for this app. It is
+     written at once, so the copy is there even if the app is closed a
+     moment later. cart.js decides what the text says; this only keeps it. */
+
+  var CART_KEY = 'till:cart';
+
+  /* Keeps the text and reads it back to prove it. Returns true or false. */
+  function keepCartText(text) {
+    try {
+      global.localStorage.setItem(CART_KEY, String(text));
+      return global.localStorage.getItem(CART_KEY) === String(text);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* The kept text, or null if there is none (or it cannot be read). */
+  function keptCartText() {
+    try {
+      return global.localStorage.getItem(CART_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* Throws the kept copy away and proves it is gone. Returns true or false. */
+  function dropCart() {
+    try {
+      global.localStorage.removeItem(CART_KEY);
+      return global.localStorage.getItem(CART_KEY) === null;
+    } catch (e) {
+      return false;
+    }
+  }
+
   global.Till = {
+    keepCartText: keepCartText,
+    keptCartText: keptCartText,
+    dropCart: dropCart,
     DB_VERSION: DB_VERSION,
     readAll: readAll,
     saveBackupNote: saveBackupNote,
