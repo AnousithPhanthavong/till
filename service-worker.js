@@ -1,7 +1,7 @@
 /* Keeps a copy of the till on the iPad so it opens with no internet.
    Change CACHE when you send a new version of the files. */
 
-var CACHE = 'till-24';
+var CACHE = 'till-25';
 
 var FILES = [
   './',
@@ -9,6 +9,7 @@ var FILES = [
   './db.js',
   './cart.js',
   './receipt.js',
+  './report.js',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-512.png'

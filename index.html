@@ -470,10 +470,11 @@
       <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
       <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
       <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
-      <div class="row"><span>Last sale</span><span class="v" id="last-sale">–</span></div>
+      <div class="row"><span>Today</span><span class="v" id="today-sales">–</span></div>
     </section>
 
     <button id="go-sell">Sell</button>
+    <button id="go-history" class="secondary">Sales history</button>
     <button id="go-products" class="secondary">Products</button>
     <button id="go-shop" class="secondary">Shop details</button>
 
@@ -614,6 +615,47 @@
     <button id="r-print" disabled>Print</button>
     <button id="r-new" class="secondary">New sale</button>
     <button id="r-back" class="secondary">Back</button>
+
+  </section>
+
+  <!-- ================== SALES HISTORY SCREEN ================ -->
+  <section id="screen-history" hidden>
+
+    <h1>Sales history</h1>
+    <p class="lede" id="h-lede">Reading…</p>
+    <p class="msg" id="h-msg" hidden></p>
+
+    <section class="panel">
+      <h2>Each day, newest first</h2>
+      <div id="h-list"><div class="empty">Reading…</div></div>
+    </section>
+
+    <button id="h-more" class="secondary" hidden>Show older days</button>
+    <button id="h-back" class="secondary">Back to home</button>
+
+  </section>
+
+  <!-- ===================== ONE DAY SCREEN =================== -->
+  <section id="screen-day" hidden>
+
+    <h1 id="dy-title">Day</h1>
+    <p class="lede">Tap a sale to see its receipt.</p>
+    <p class="msg" id="dy-msg" hidden></p>
+
+    <section class="panel">
+      <div class="row"><span>Total</span><span class="v" id="dy-total">–</span></div>
+      <div class="row"><span>Cash</span><span class="v" id="dy-cash">–</span></div>
+      <div class="row"><span>QR</span><span class="v" id="dy-qr">–</span></div>
+      <div class="row"><span>Sales</span><span class="v" id="dy-count">–</span></div>
+      <div class="row"><span>Items sold</span><span class="v" id="dy-items">–</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Sales, newest first</h2>
+      <div id="dy-list"><div class="empty">Reading…</div></div>
+    </section>
+
+    <button id="dy-back" class="secondary">Back to sales history</button>
 
   </section>
 
@@ -839,6 +881,7 @@
 <script src="./db.js"></script>
 <script src="./cart.js"></script>
 <script src="./receipt.js"></script>
+<script src="./report.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
 
@@ -865,6 +908,13 @@
     return typeof Receipt !== 'undefined' && typeof Receipt.shopLines === 'function';
   }
 
+  function reportIsCurrent() {
+    return typeof Report !== 'undefined' && typeof Report.dailyTotals === 'function';
+  }
+  function allCurrent() {
+    return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent();
+  }
+
   function showStatus() {
     var home = window.navigator.standalone === true ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
@@ -874,7 +924,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Stock build 6d';
+      'History build 7a';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -890,6 +940,8 @@
     $('screen-form').hidden = (which !== 'form');
     $('screen-stock').hidden = (which !== 'stock');
     $('screen-remove').hidden = (which !== 'remove');
+    $('screen-history').hidden = (which !== 'history');
+    $('screen-day').hidden = (which !== 'day');
     window.scrollTo(0, 0);
   }
 
@@ -1368,7 +1420,12 @@
 
   /* Reads the sale back from what is saved, not from the screen,
      so the receipt always shows exactly what was recorded. */
-  function openReceipt(saleId) {
+  /* Where Back goes from the receipt: 'done' or 'day'. */
+  var receiptFrom = 'done';
+
+  function openReceipt(saleId, from) {
+    receiptFrom = from || 'done';
+    $('r-back').textContent = receiptFrom === 'day' ? 'Back to the day' : 'Back';
     say('r-msg', '', '');
     $('r-paper').innerHTML = '';
     $('r-paper').hidden = true;
@@ -1392,7 +1449,7 @@
   }
 
   $('d-receipt').addEventListener('click', function () {
-    if (doneSaleId) { openReceipt(doneSaleId); }
+    if (doneSaleId) { openReceipt(doneSaleId, 'done'); }
   });
   /* Sets the paper length to the length of this receipt, so the printer
      does not feed out a long blank strip after it. */
@@ -1424,7 +1481,12 @@
   $('r-new').addEventListener('click', newSale);
   $('r-back').addEventListener('click', function () {
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
-    show('done');
+    if (receiptFrom === 'day') {
+      show('day');
+      loadDay();
+    } else {
+      show('done');
+    }
   });
 
   /* A scan on the Sale saved or Receipt screen starts the next sale
@@ -1616,14 +1678,10 @@
 
       return Till.getAll('sales');
     }).then(function (sales) {
-      var last = null;
-      sales.forEach(function (x) {
-        if (Number.isInteger(x.number) && (!last || x.number > last.number)) { last = x; }
-      });
-      $('last-sale').textContent = last
-        ? 'No. ' + last.number + ' \u00B7 ' + Till.formatKip(last.totalKip) + ' \u00B7 ' +
-          (last.method === 'cash' ? 'Cash' : 'QR') + ' \u00B7 ' + timeOf(last.at)
-        : 'None yet';
+      var t = Report.dayTotals(sales, Till.localDate(new Date()));
+      $('today-sales').textContent = t.count
+        ? plural(t.count, 'sale', 'sales') + ' \u00B7 ' + Till.formatKip(t.totalKip)
+        : 'No sales yet';
 
       return Till.expiryAlerts();
     }).then(function (alerts) {
@@ -1690,8 +1748,7 @@
 
   /* A till left open overnight: check again when the app comes back. */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && !$('screen-home').hidden &&
-        dbIsCurrent() && cartIsCurrent() && receiptIsCurrent()) {
+    if (document.visibilityState === 'visible' && !$('screen-home').hidden && allCurrent()) {
       refresh();
     }
   });
@@ -2079,6 +2136,145 @@
     closeRemove('');
   });
 
+  /* ---------- sales history ---------- */
+
+  var DAYS_PER_PAGE = 31;
+  var historyShown = DAYS_PER_PAGE;
+  var historyDate = null;   /* the day open on the day screen */
+
+  function dayLabel(ymd) {
+    return Report.weekday(ymd) + ' ' + Receipt.dateText(ymd);
+  }
+
+  function errText(err) {
+    return String(err && err.message ? err.message : err);
+  }
+
+  function skippedNote(n) {
+    return n ? plural(n, 'saved sale looks wrong and was', 'saved sales look wrong and were') +
+      ' left out of these totals.' : '';
+  }
+
+  function loadHistory() {
+    say('h-msg', '', '');
+    $('h-more').hidden = true;
+    $('h-lede').textContent = 'Reading…';
+    $('h-list').innerHTML = '<div class="empty">Reading…</div>';
+
+    return Till.getAll('sales').then(function (sales) {
+      var result = Report.dailyTotals(sales);
+      var days = result.days;
+      say('h-msg', 'bad', skippedNote(result.skipped));
+
+      if (!days.length) {
+        $('h-lede').textContent = 'No sales saved yet.';
+        $('h-list').innerHTML = '<div class="empty">Sales appear here once you make them.</div>';
+        return;
+      }
+      $('h-lede').textContent = plural(days.length, 'day', 'days') +
+        ' with sales. Tap a day to see its sales.';
+
+      var html = '';
+      days.slice(0, historyShown).forEach(function (d) {
+        var sub = plural(d.count, 'sale', 'sales') +
+          ' \u00B7 Cash ' + Till.formatKip(d.cashKip) +
+          ' \u00B7 QR ' + Till.formatKip(d.qrKip);
+        html +=
+          '<button type="button" class="item" data-date="' + esc(d.date) + '">' +
+            '<span class="who"><span class="nm">' + esc(dayLabel(d.date)) + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="price">' + Till.formatKip(d.totalKip) +
+              ' <span class="chev">\u203A</span></span>' +
+          '</button>';
+      });
+      $('h-list').innerHTML = html;
+      $('h-more').hidden = days.length <= historyShown;
+    }).catch(function (err) {
+      $('h-lede').textContent = 'The sales could not be read.';
+      $('h-list').innerHTML = '<div class="empty">' + esc(errText(err)) + '</div>';
+    });
+  }
+
+  $('go-history').addEventListener('click', function () {
+    historyShown = DAYS_PER_PAGE;
+    show('history');
+    loadHistory();
+  });
+
+  $('h-more').addEventListener('click', function () {
+    historyShown += DAYS_PER_PAGE;
+    loadHistory();
+  });
+
+  $('h-back').addEventListener('click', function () {
+    show('home');
+    refresh();
+  });
+
+  $('h-list').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    historyDate = row.getAttribute('data-date');
+    show('day');
+    loadDay();
+  });
+
+  function loadDay() {
+    var date = historyDate;
+    say('dy-msg', '', '');
+    $('dy-title').textContent = dayLabel(date);
+    ['dy-total', 'dy-cash', 'dy-qr', 'dy-count', 'dy-items'].forEach(function (id) {
+      $(id).textContent = '–';
+    });
+    $('dy-list').innerHTML = '<div class="empty">Reading…</div>';
+
+    return Till.getAll('sales').then(function (sales) {
+      var t = Report.dayTotals(sales, date);
+      var list = Report.salesOnDay(sales, date);
+      var skipped = sales.filter(function (s) {
+        return s && s.type === 'sale' && s.date === date && !Report.isCountable(s);
+      }).length;
+      say('dy-msg', 'bad', skippedNote(skipped));
+
+      $('dy-total').textContent = Till.formatKip(t.totalKip);
+      $('dy-cash').textContent = Till.formatKip(t.cashKip);
+      $('dy-qr').textContent = Till.formatKip(t.qrKip);
+      $('dy-count').textContent = t.count.toLocaleString('en-US');
+      $('dy-items').textContent = t.itemCount.toLocaleString('en-US');
+
+      if (!list.length) {
+        $('dy-list').innerHTML = '<div class="empty">No sales on this day.</div>';
+        return;
+      }
+      var html = '';
+      list.forEach(function (s) {
+        var sub = timeOf(s.at) + ' \u00B7 ' + (s.method === 'cash' ? 'Cash' : 'QR') +
+          ' \u00B7 ' + plural(s.itemCount, 'item', 'items');
+        html +=
+          '<button type="button" class="item" data-id="' + esc(s.id) + '">' +
+            '<span class="who"><span class="nm">No. ' + s.number + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="price">' + Till.formatKip(s.totalKip) +
+              ' <span class="chev">\u203A</span></span>' +
+          '</button>';
+      });
+      $('dy-list').innerHTML = html;
+    }).catch(function (err) {
+      $('dy-list').innerHTML = '<div class="empty">' + esc(errText(err)) + '</div>';
+    });
+  }
+
+  $('dy-list').addEventListener('click', function (event) {
+    var row = event.target.closest ? event.target.closest('button.item') : null;
+    if (!row) { return; }
+    openReceipt(row.getAttribute('data-id'), 'day');
+  });
+
+  $('dy-back').addEventListener('click', function () {
+    show('history');
+    loadHistory();
+  });
+
   /* ---------- shop details ---------- */
 
   $('go-shop').addEventListener('click', function () {
@@ -2164,14 +2360,16 @@
   showStatus();
   show('home');
 
-  if (dbIsCurrent() && cartIsCurrent() && receiptIsCurrent()) {
+  if (allCurrent()) {
     refresh();
   } else {
-    var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' : 'receipt.js');
+    var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' :
+      (!receiptIsCurrent() ? 'receipt.js' : 'report.js'));
     $('verdict').setAttribute('data-state', 'bad');
     $('verdict').textContent = 'The app is only half updated';
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';
     $('go-sell').disabled = true;
+    $('go-history').disabled = true;
     $('go-products').disabled = true;
     $('go-shop').disabled = true;
     $('cleanup').hidden = true;
