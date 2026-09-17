@@ -4,6 +4,7 @@
    checked automatically.
 
    Step 7a: totals for each day, and the sales on one day.
+   Step 7b: totals for each month, and for the last 12 months.
 
    Only records marked as sales are counted. When voids and refunds are
    added later they will be their own kind of record, so they can never be
@@ -86,7 +87,93 @@
     return WEEKDAYS[d.getDay()];
   }
 
+  /* ---------- turnover (7b) ---------- */
+
+  function parseYmd(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+    if (!m) { throw new Error('The date on this device could not be read.'); }
+    return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
+  }
+
+  function two(n) { return String(n).padStart(2, '0'); }
+
+  function daysInMonth(y, m) {
+    return new Date(Date.UTC(y, m, 0)).getUTCDate();
+  }
+
+  /* The day after the same date one year earlier.
+     2026-09-17 gives 2025-09-18. On 29 February, a year earlier is taken
+     as 28 February, so 2028-02-29 gives 2027-03-01. */
+  function yearStart(todayYmd) {
+    var t = parseYmd(todayYmd);
+    var y = t.y - 1;
+    var d = Math.min(t.d, daysInMonth(y, t.m));
+    var next = new Date(Date.UTC(y, t.m - 1, d + 1));
+    return next.getUTCFullYear() + '-' + two(next.getUTCMonth() + 1) + '-' + two(next.getUTCDate());
+  }
+
+  /* Sales from yearStart(today) up to and including today.
+     Returns { from, to, count, totalKip, cashKip, qrKip, later, skipped }.
+     `later` counts sales dated after today, which means the device clock
+     was wrong at some point. They are not in the total. */
+  function lastTwelveMonths(sales, todayYmd) {
+    var from = yearStart(todayYmd);
+    var r = { from: from, to: todayYmd, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, later: 0, skipped: 0 };
+    var days = dailyTotals(sales);
+    r.skipped = days.skipped;
+    days.days.forEach(function (d) {
+      if (d.date > todayYmd) { r.later += d.count; return; }
+      if (d.date < from) { return; }
+      r.count += d.count;
+      r.totalKip = add(r.totalKip, d.totalKip);
+      r.cashKip = add(r.cashKip, d.cashKip);
+      r.qrKip = add(r.qrKip, d.qrKip);
+    });
+    return r;
+  }
+
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* "2026-09" becomes "Sep 2026". */
+  function monthName(ym) {
+    var m = /^(\d{4})-(\d{2})$/.exec(String(ym || ''));
+    return m ? MONTHS[Number(m[2]) - 1] + ' ' + m[1] : '';
+  }
+
+  /* The 12 calendar months up to and including this one, newest first.
+     Months with no sales are included, with zeros.
+     Each: { month: 'YYYY-MM', count, totalKip, cashKip, qrKip, soFar } */
+  function monthTotals(sales, todayYmd) {
+    var t = parseYmd(todayYmd);
+    var list = [];
+    var byMonth = {};
+    for (var i = 0; i < 12; i++) {
+      var y = t.y;
+      var m = t.m - i;
+      while (m < 1) { m += 12; y -= 1; }
+      var key = y + '-' + two(m);
+      var row = { month: key, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, soFar: i === 0 };
+      byMonth[key] = row;
+      list.push(row);
+    }
+    dailyTotals(sales).days.forEach(function (d) {
+      if (d.date > todayYmd) { return; }
+      var row = byMonth[d.date.slice(0, 7)];
+      if (!row) { return; }
+      row.count += d.count;
+      row.totalKip = add(row.totalKip, d.totalKip);
+      row.cashKip = add(row.cashKip, d.cashKip);
+      row.qrKip = add(row.qrKip, d.qrKip);
+    });
+    return list;
+  }
+
   global.Report = {
+    yearStart: yearStart,
+    lastTwelveMonths: lastTwelveMonths,
+    monthTotals: monthTotals,
+    monthName: monthName,
     isCountable: isCountable,
     dailyTotals: dailyTotals,
     dayTotals: dayTotals,

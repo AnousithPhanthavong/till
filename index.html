@@ -313,6 +313,10 @@
     font-size: 18px;
   }
   .row[hidden] { display: none; }
+  /* turnover screen */
+  .yearbox { padding: 6px 18px 14px; color: var(--muted); font-size: 15px; }
+  .yearbox .big { display: block; color: var(--ink); font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .panel .yearbox + .row { border-top: 1px solid var(--line); }
   .row .v { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
   .complete { font-size: 22px; min-height: 64px; margin-bottom: 0; }
 
@@ -625,6 +629,8 @@
     <p class="lede" id="h-lede">Reading…</p>
     <p class="msg" id="h-msg" hidden></p>
 
+    <button id="h-turnover">Turnover by month</button>
+
     <section class="panel">
       <h2>Each day, newest first</h2>
       <div id="h-list"><div class="empty">Reading…</div></div>
@@ -632,6 +638,31 @@
 
     <button id="h-more" class="secondary" hidden>Show older days</button>
     <button id="h-back" class="secondary">Back to home</button>
+
+  </section>
+
+  <!-- ===================== TURNOVER SCREEN ================== -->
+  <section id="screen-turnover" hidden>
+
+    <h1>Turnover</h1>
+    <p class="lede" id="tv-lede">Reading…</p>
+    <p class="msg" id="tv-msg" hidden></p>
+
+    <section class="panel">
+      <h2>Last 12 months</h2>
+      <div class="yearbox" id="tv-year">–</div>
+      <div class="row"><span>Cash</span><span class="v" id="tv-cash">–</span></div>
+      <div class="row"><span>QR</span><span class="v" id="tv-qr">–</span></div>
+      <div class="row"><span>Sales</span><span class="v" id="tv-count">–</span></div>
+    </section>
+    <p class="note">The months below start on the 1st, so added together they can differ a little from the 12-month figure.</p>
+
+    <section class="panel">
+      <h2>Each month, newest first</h2>
+      <div id="tv-months"><div class="empty">Reading…</div></div>
+    </section>
+
+    <button id="tv-back" class="secondary">Back to sales history</button>
 
   </section>
 
@@ -909,7 +940,7 @@
   }
 
   function reportIsCurrent() {
-    return typeof Report !== 'undefined' && typeof Report.dailyTotals === 'function';
+    return typeof Report !== 'undefined' && typeof Report.monthTotals === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent();
@@ -924,7 +955,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'History build 7a';
+      'History build 7b';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -942,6 +973,7 @@
     $('screen-remove').hidden = (which !== 'remove');
     $('screen-history').hidden = (which !== 'history');
     $('screen-day').hidden = (which !== 'day');
+    $('screen-turnover').hidden = (which !== 'turnover');
     window.scrollTo(0, 0);
   }
 
@@ -2271,6 +2303,66 @@
   });
 
   $('dy-back').addEventListener('click', function () {
+    show('history');
+    loadHistory();
+  });
+
+  /* ---------- turnover ---------- */
+
+  function loadTurnover() {
+    say('tv-msg', '', '');
+    $('tv-lede').textContent = 'Reading…';
+    $('tv-year').textContent = '–';
+    ['tv-cash', 'tv-qr', 'tv-count'].forEach(function (id) { $(id).textContent = '–'; });
+    $('tv-months').innerHTML = '<div class="empty">Reading…</div>';
+
+    return Till.getAll('sales').then(function (sales) {
+      var today = Till.localDate(new Date());
+      var year = Report.lastTwelveMonths(sales, today);
+      var months = Report.monthTotals(sales, today);
+
+      $('tv-lede').textContent = 'From ' + Receipt.dateText(year.from) +
+        ' to ' + Receipt.dateText(year.to) + ', today included.';
+      $('tv-year').innerHTML = 'Total sales:<span class="big">' + Till.formatKip(year.totalKip) + '</span>';
+      $('tv-cash').textContent = Till.formatKip(year.cashKip);
+      $('tv-qr').textContent = Till.formatKip(year.qrKip);
+      $('tv-count').textContent = year.count.toLocaleString('en-US');
+
+      var warn = [];
+      if (year.skipped) { warn.push(skippedNote(year.skipped)); }
+      if (year.later) {
+        warn.push(plural(year.later, 'sale is', 'sales are') +
+          ' dated after today and not counted. Check the date and time on this device.');
+      }
+      say('tv-msg', 'bad', warn.join(' '));
+
+      var html = '';
+      months.forEach(function (m) {
+        var sub = m.count
+          ? plural(m.count, 'sale', 'sales') + ' \u00B7 Cash ' + Till.formatKip(m.cashKip) +
+            ' \u00B7 QR ' + Till.formatKip(m.qrKip)
+          : 'No sales';
+        html +=
+          '<div class="item">' +
+            '<span class="who"><span class="nm">' + esc(Report.monthName(m.month)) +
+              (m.soFar ? ' (so far)' : '') + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="price">' + Till.formatKip(m.totalKip) + '</span>' +
+          '</div>';
+      });
+      $('tv-months').innerHTML = html;
+    }).catch(function (err) {
+      $('tv-lede').textContent = 'Turnover could not be worked out.';
+      $('tv-months').innerHTML = '<div class="empty">' + esc(errText(err)) + '</div>';
+    });
+  }
+
+  $('h-turnover').addEventListener('click', function () {
+    show('turnover');
+    loadTurnover();
+  });
+
+  $('tv-back').addEventListener('click', function () {
     show('history');
     loadHistory();
   });
