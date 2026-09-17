@@ -774,7 +774,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.sellableStock === 'function';
+    return typeof Till !== 'undefined' && typeof Till.removeStock === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.changeDue === 'function';
@@ -792,7 +792,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Stock build 6c';
+      'Stock build 6d-1';
   }
 
   /* ---------- moving between the two screens ---------- */

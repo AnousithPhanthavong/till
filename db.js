@@ -1,7 +1,8 @@
 /* db.js — where the till keeps its data on the iPad.
    Every screen built later talks to the data through this one file.
    Step 6a added stock deliveries, 6b expiry warnings, 6c selling takes
-   stock earliest-expiry first (no change to the tables).
+   stock earliest-expiry first (no change to the tables). 6d added the
+   removals table: stock taken out with a reason.
 
    Money is always whole kip, stored as a plain number. Never decimals.
    Dates are stored as text, YYYY-MM-DD, so they sort correctly. */
@@ -10,7 +11,7 @@
   'use strict';
 
   var DB_NAME = 'till';
-  var DB_VERSION = 2;   /* 2 added the settings table. Existing data is kept. */
+  var DB_VERSION = 3;   /* 2 added settings, 3 added removals. Existing data is kept. */
 
   /* ---------- opening the database ---------- */
 
@@ -59,6 +60,16 @@
            One row per setting. Added in version 2. */
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'key' });
+        }
+
+        /* Removals — stock taken out of a delivery with a reason (damaged,
+           expired, miscounted). Never edited, never deleted. Added in
+           version 3. */
+        if (!db.objectStoreNames.contains('removals')) {
+          var removals = db.createObjectStore('removals', { keyPath: 'id' });
+          removals.createIndex('batchId', 'batchId', { unique: false });
+          removals.createIndex('productId', 'productId', { unique: false });
+          removals.createIndex('at', 'at', { unique: false });
         }
       };
 
@@ -196,7 +207,7 @@
      including in another tab, and then nothing happens and no error is
      reported. Emptying the tables always works. */
   function wipe() {
-    var names = ['products', 'batches', 'sales', 'saleLines'];
+    var names = ['products', 'batches', 'sales', 'saleLines', 'removals'];
 
     return open().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -749,6 +760,153 @@
   }
 
 
+  /* ---------- removing stock (Step 6d) ----------
+     Items taken out of one delivery with a reason. Each removal is its own
+     new record. The delivery's qtyRemaining goes down in the same
+     all-or-nothing save, so the two can never disagree. Nothing is ever
+     quietly changed or deleted. */
+
+  var REMOVAL_REASONS = {
+    damaged: 'Damaged',
+    expired: 'Expired',
+    miscounted: 'Miscounted',
+    other: 'Other'
+  };
+  var MAX_REMOVAL_NOTE = 60;
+
+  /* A fresh id for a removal. The form asks for one when it opens, so
+     pressing Save twice can only ever save one removal. */
+  function newRemovalId() {
+    return newId('rmv');
+  }
+
+  /* Checks the form (not the delivery) and builds most of the record.
+     Throws a plain-language error if anything is wrong. Saves nothing. */
+  function buildRemoval(removalId, input, now) {
+    if (typeof removalId !== 'string' || !/^rmv_[a-z0-9_]+$/.test(removalId)) {
+      throw new Error('This removal has no proper number. Go back and open it again.');
+    }
+    input = input || {};
+    if (typeof input.batchId !== 'string' || !input.batchId) {
+      throw new Error('Choose which delivery to remove from.');
+    }
+
+    var qtyText = String(input.qty === null || input.qty === undefined ? '' : input.qty).trim();
+    if (!/^[0-9,\s]+$/.test(qtyText)) {
+      throw new Error('Type how many to remove, as a whole number.');
+    }
+    var qty = toKip(qtyText);
+    if (qty === null || qty < 1) {
+      throw new Error('Type how many to remove.');
+    }
+
+    var reason = String(input.reason || '');
+    if (!Object.prototype.hasOwnProperty.call(REMOVAL_REASONS, reason)) {
+      throw new Error('Choose a reason.');
+    }
+
+    var note = tidy(input.note);
+    if (note.length > MAX_REMOVAL_NOTE) {
+      throw new Error('The note is too long (' + MAX_REMOVAL_NOTE + ' characters at most).');
+    }
+    if (reason === 'other' && !note) {
+      throw new Error('For "Other", write a short note saying why.');
+    }
+
+    return {
+      id: removalId,
+      type: 'removal',
+      batchId: input.batchId,
+      qty: qty,
+      reason: reason,
+      note: note,
+      at: now.toISOString(),
+      date: localDate(now)
+    };
+  }
+
+  /* Checks a removal against the delivery it comes from. Reads and changes
+     nothing. Returns an error message, or '' if it is fine. */
+  function removalProblem(batch, qty) {
+    if (!batch) { return 'That delivery is no longer saved.'; }
+    var left = Number.isInteger(batch.qtyRemaining) ? batch.qtyRemaining : 0;
+    if (left <= 0) { return 'Nothing is left in that delivery.'; }
+    if (qty > left) {
+      return 'Only ' + left + ' left in that delivery. You cannot remove ' + qty + '.';
+    }
+    return '';
+  }
+
+  /* Takes items out of one delivery and saves the reason, all or nothing,
+     then reads it back to prove it.
+     - Never removes more than is left.
+     - Same removal id twice (a double tap or retry) saves once and takes
+       stock once; the saved one is returned.
+     Resolves to { removal, alreadySaved }. */
+  function removeStock(removalId, input) {
+    var built;
+    try {
+      built = buildRemoval(removalId, input, new Date());
+    } catch (err) {
+      return Promise.reject(err);
+    }
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['removals', 'batches'], 'readwrite');
+        var removals = t.objectStore('removals');
+        var batches = t.objectStore('batches');
+        var result = null;
+        var problem = '';
+
+        removals.get(removalId).onsuccess = function (e) {
+          if (e.target.result) {
+            result = { removal: e.target.result, alreadySaved: true };
+            return;
+          }
+          batches.get(built.batchId).onsuccess = function (e2) {
+            var batch = e2.target.result;
+            problem = removalProblem(batch, built.qty);
+            if (problem) {
+              t.abort();
+              return;
+            }
+            built.productId = batch.productId;
+            built.expiry = batch.expiry || '';
+            built.lot = batch.lot || '';
+            built.qtyBefore = batch.qtyRemaining;
+            built.qtyAfter = batch.qtyRemaining - built.qty;
+
+            batch.qtyRemaining = built.qtyAfter;
+            batches.put(batch);
+            /* add, not put: add refuses to overwrite anything. */
+            removals.add(built);
+            result = { removal: built, alreadySaved: false };
+          };
+        };
+
+        t.oncomplete = function () { resolve(result); };
+        t.onerror = function () { reject(new Error(problem || 'The removal was NOT saved. Try Save again.')); };
+        t.onabort = function () { reject(new Error(problem || 'The removal was NOT saved. Try Save again.')); };
+      });
+    }).then(function (result) {
+      return get('removals', removalId).then(function (saved) {
+        if (!saved || saved.qty !== result.removal.qty || saved.batchId !== result.removal.batchId) {
+          return Promise.reject(new Error('The removal did not save. Try again.'));
+        }
+        return { removal: saved, alreadySaved: result.alreadySaved };
+      });
+    });
+  }
+
+  /* Every removal for one product, newest first. */
+  function removalsForProduct(productId) {
+    return byIndex('removals', 'productId', productId).then(function (rows) {
+      return rows.sort(function (a, b) { return a.at < b.at ? 1 : (a.at > b.at ? -1 : 0); });
+    });
+  }
+
+
   /* ---------- expiry warnings ---------- */
 
   var SOON_DAYS = 60;
@@ -951,7 +1109,13 @@
     expiryAlerts: expiryAlerts,
     allocate: allocate,
     sellableByProduct: sellableByProduct,
-    sellableStock: sellableStock
+    sellableStock: sellableStock,
+    REMOVAL_REASONS: REMOVAL_REASONS,
+    MAX_REMOVAL_NOTE: MAX_REMOVAL_NOTE,
+    newRemovalId: newRemovalId,
+    removalProblem: removalProblem,
+    removeStock: removeStock,
+    removalsForProduct: removalsForProduct
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
