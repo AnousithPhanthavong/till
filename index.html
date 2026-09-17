@@ -38,9 +38,108 @@
       calc(env(safe-area-inset-bottom) + 40px)
       calc(env(safe-area-inset-left) + 20px);
   }
-  main { max-width: 32rem; margin: 0 auto; }
+  /* Each screen keeps its narrow column; the menu may use more width. */
+  main { max-width: 60rem; margin: 0 auto; }
+  main > section, footer { max-width: 32rem; margin-left: auto; margin-right: auto; }
+  main > #screen-home { max-width: 60rem; }
 
-  .shopname { font-size: 15px; color: var(--brand); margin: 0 0 20px; }
+  /* ---------- the bar across the top of every screen (10a) ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    margin:
+      calc(-1 * (env(safe-area-inset-top) + 28px))
+      calc(-1 * (env(safe-area-inset-right) + 20px))
+      24px
+      calc(-1 * (env(safe-area-inset-left) + 20px));
+    padding:
+      calc(env(safe-area-inset-top) + 10px)
+      calc(env(safe-area-inset-right) + 20px)
+      10px
+      calc(env(safe-area-inset-left) + 20px);
+  }
+  .tb-logo { width: 44px; height: 44px; border-radius: 12px; flex: none; }
+  .tb-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 22px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tb-clock { color: var(--muted); font-size: 17px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tb-net { font-size: 16px; font-weight: 600; white-space: nowrap; color: var(--good); }
+  .tb-net::before {
+    content: '';
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+    margin-right: 6px;
+  }
+  .tb-net[data-state="off"] { color: var(--bad); }
+  button.tb-menu {
+    position: relative;
+    width: auto;
+    min-height: 48px;
+    margin: 0;
+    padding: 8px 18px;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    flex: none;
+  }
+  button.tb-menu:active { background: #E6EDE9; }
+  .tb-dot {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #E0A100;
+    border: 2px solid #fff;
+  }
+  .tb-dot[hidden] { display: none; }
+  @media (max-width: 700px) {
+    .tb-clock .tb-date { display: none; }
+    .tb-name { font-size: 18px; }
+    .tb-logo { width: 36px; height: 36px; }
+  }
+
+  /* ---------- the menu (was Home) ---------- */
+  button.bigsell { font-size: 24px; min-height: 72px; margin-bottom: 22px; }
+  .groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .group h2 {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 8px 4px;
+  }
+  button.tile {
+    display: block;
+    text-align: left;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+  }
+  button.tile:active { background: #EDF2EE; }
+  button.tile .sub { display: block; font-size: 14px; font-weight: 400; color: var(--muted); }
 
   h1 {
     font-size: 30px;
@@ -393,6 +492,7 @@
     html, body { background: #fff !important; }
     body { padding: 0 !important; margin: 0 !important; }
     main { max-width: none; margin: 0; }
+    .topbar { display: none !important; }
     main > *:not(#screen-receipt) { display: none !important; }
     #screen-receipt > *:not(#r-paper) { display: none !important; }
     #screen-receipt { display: block !important; }
@@ -457,14 +557,22 @@
 </style>
 </head>
 <body>
+<header class="topbar" id="topbar">
+  <img class="tb-logo" src="./icon-180.png" alt="">
+  <span class="tb-name" id="tb-name">Baby shop till</span>
+  <span class="tb-clock" id="tb-clock"></span>
+  <span class="tb-net" id="tb-net">Online</span>
+  <button type="button" class="tb-menu" id="tb-menu" hidden>&#9776; Menu<span class="tb-dot" id="tb-dot" hidden></span></button>
+</header>
 <main>
-  <p class="shopname">Baby shop till</p>
 
   <!-- ===================== HOME SCREEN ===================== -->
   <section id="screen-home">
 
     <h1 id="verdict">Checking…</h1>
     <p class="lede" id="lede">Reading what is saved on this device.</p>
+
+    <button id="go-sell" class="bigsell">Sell</button>
 
     <section class="panel alert soon-only" id="cart-panel" hidden>
       <h2 id="cart-heading" style="color: var(--warn)">Unfinished sale</h2>
@@ -475,19 +583,8 @@
       </div>
     </section>
 
-    <section class="panel alert" id="exp-panel" hidden>
-      <h2 id="exp-heading">Expiry</h2>
-      <div id="exp-list"></div>
-    </section>
-
     <section class="panel">
-      <h2>Saved on this device</h2>
-      <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
-      <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
-      <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
-      <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
       <div class="row"><span>Today</span><span class="v" id="today-sales">–</span></div>
-      <div class="row"><span>Last backup</span><span class="v" id="last-backup">–</span></div>
     </section>
 
     <section class="panel alert soon-only" id="backup-due" hidden>
@@ -495,11 +592,37 @@
       <div class="row"><span id="backup-due-text"></span></div>
     </section>
 
-    <button id="go-sell">Sell</button>
-    <button id="go-history" class="secondary">Sales history</button>
-    <button id="go-products" class="secondary">Products</button>
-    <button id="go-shop" class="secondary">Shop details</button>
-    <button id="go-backup" class="secondary">Backup</button>
+    <section class="panel alert" id="exp-panel" hidden>
+      <h2 id="exp-heading">Expiry</h2>
+      <div id="exp-list"></div>
+    </section>
+
+    <div class="groups">
+      <section class="group">
+        <h2>Stock</h2>
+        <button id="go-products" class="tile">Products<span class="sub">Add, change, deliveries, remove stock</span></button>
+      </section>
+      <section class="group">
+        <h2>Reports</h2>
+        <button id="go-history" class="tile">Sales history<span class="sub">Each day and its receipts</span></button>
+        <button id="go-turnover" class="tile">Turnover by month<span class="sub">Last 12 months</span></button>
+        <button id="go-gaps" class="tile">Stock gaps and removals<span class="sub">Sold with no stock on record</span></button>
+      </section>
+      <section class="group">
+        <h2>Shop</h2>
+        <button id="go-backup" class="tile">Backup<span class="sub">Save a copy, restore, start fresh</span></button>
+        <button id="go-shop" class="tile">Shop details<span class="sub">Name, phone, bottom line of receipts</span></button>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Saved on this device</h2>
+      <div class="row"><span>Products</span><span class="n" id="n-products">–</span></div>
+      <div class="row"><span>Batches of stock</span><span class="n" id="n-batches">–</span></div>
+      <div class="row"><span>Sales</span><span class="n" id="n-sales">–</span></div>
+      <div class="row"><span>Items sold</span><span class="n" id="n-saleLines">–</span></div>
+      <div class="row"><span>Last backup</span><span class="v" id="last-backup">–</span></div>
+    </section>
 
   </section>
 
@@ -538,7 +661,7 @@
     </section>
 
     <button id="s-clear" class="quiet" hidden>Clear cart</button>
-    <button id="s-back" class="secondary">Back</button>
+    <button id="s-back" class="secondary">Back to menu</button>
 
   </section>
 
@@ -622,7 +745,7 @@
 
     <button id="d-new">New sale</button>
     <button id="d-receipt" class="secondary">Show receipt</button>
-    <button id="d-home" class="secondary">Home</button>
+    <button id="d-home" class="secondary">Menu</button>
 
   </section>
 
@@ -658,7 +781,7 @@
     </section>
 
     <button id="h-more" class="secondary" hidden>Show older days</button>
-    <button id="h-back" class="secondary">Back to home</button>
+    <button id="h-back" class="secondary">Back to menu</button>
 
   </section>
 
@@ -747,7 +870,7 @@
     </section>
 
     <button id="go-add">Add product</button>
-    <button id="back-home" class="secondary">Back</button>
+    <button id="back-home" class="secondary">Back to menu</button>
 
   </section>
 
@@ -964,7 +1087,7 @@
       </div>
     </section>
 
-    <button id="bk-back" class="secondary">Back to home</button>
+    <button id="bk-back" class="secondary">Back to menu</button>
 
   </section>
 
@@ -1006,7 +1129,7 @@
       <div class="row"><span id="ld-restore-text"></span></div>
     </section>
     <button id="ld-restore" hidden>Restore this backup</button>
-    <button id="ld-home" hidden>Go to home</button>
+    <button id="ld-home" hidden>Go to menu</button>
 
     <button id="ld-back" class="secondary">Back to backup</button>
 
@@ -1092,7 +1215,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Fresh build 9d-2';
+  var BUILD = 'Layout build 10a-1';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -1125,8 +1248,61 @@
     $('screen-gaps').hidden = (which !== 'gaps');
     $('screen-backup').hidden = (which !== 'backup');
     $('screen-load').hidden = (which !== 'load');
+    currentScreen = which;
+    /* The Menu button only appears where leaving loses nothing. Screens
+       with a form or a payment in progress keep their own Back/Cancel,
+       which tidy up first. */
+    $('tb-menu').hidden = MENU_SCREENS.indexOf(which) === -1;
     window.scrollTo(0, 0);
   }
+
+  var currentScreen = 'home';
+  var MENU_SCREENS = ['sell', 'done', 'receipt', 'history', 'day', 'turnover', 'gaps', 'products'];
+
+  /* ---------- the top bar ---------- */
+
+  function showClock() {
+    if (!allCurrent()) { return; }
+    var d = new Date();
+    var day = Till.localDate(d);
+    $('tb-clock').innerHTML = '<span class="tb-date">' + esc(Report.weekday(day) + ' ' +
+      Receipt.dateText(day)) + '&nbsp; </span>' + esc(timeOf(d.toISOString()));
+  }
+
+  function showNet() {
+    var on = navigator.onLine !== false;
+    $('tb-net').textContent = on ? 'Online' : 'Offline';
+    $('tb-net').setAttribute('data-state', on ? 'on' : 'off');
+  }
+
+  function showShopName() {
+    return Till.getShop().then(function (shop) {
+      $('tb-name').textContent = Receipt.shopLines(shop).name === '(Shop name)'
+        ? 'Baby shop till' : Receipt.shopLines(shop).name;
+    }).catch(function () {});
+  }
+
+  /* An amber dot on Menu when a backup is due or stock is expiring,
+     so it is noticed while selling. */
+  function showMenuDot() {
+    if (!allCurrent()) { return Promise.resolve(); }
+    return Promise.all([Till.readAll(), Till.getBackupNote(), Till.expiryAlerts()]).then(function (got) {
+      var r = Backup.reminder(got[0], got[1], Till.localDate(new Date()));
+      var backupDue = r.state === 'never' || r.state === 'due' || r.state === 'fresh';
+      var why = [];
+      if (backupDue) { why.push('Backup due'); }
+      if (got[2].length) { why.push('Expiry warnings'); }
+      $('tb-dot').hidden = why.length === 0;
+      $('tb-menu').title = why.join(', ');
+    }).catch(function () {});
+  }
+
+  $('tb-menu').addEventListener('click', function () {
+    if ($('tb-menu').hidden) { return; }
+    $('tb-menu').blur();
+    show('home');
+    refresh();
+  });
 
   /* One line of feedback above a list or form. */
   function say(id, state, text) {
@@ -2022,6 +2198,8 @@
   function refresh() {
     showBackupReminder();
     showUnfinished();
+    showShopName();
+    showMenuDot();
     return Till.counts().then(function (c) {
       ['products', 'batches', 'sales', 'saleLines'].forEach(function (key) {
         var el = $('n-' + key);
@@ -2104,9 +2282,10 @@
 
   /* A till left open overnight: check again when the app comes back. */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && !$('screen-home').hidden && allCurrent()) {
-      refresh();
-    }
+    if (document.visibilityState !== 'visible' || !allCurrent()) { return; }
+    showClock();
+    showNet();
+    if (!$('screen-home').hidden) { refresh(); } else { showMenuDot(); }
   });
 
   /* ---------- buttons ---------- */
@@ -2223,7 +2402,7 @@
   });
 
   function openStock(product) {
-    $('st-back').textContent = stockFrom === 'home' ? 'Back to home' :
+    $('st-back').textContent = stockFrom === 'home' ? 'Back to menu' :
       (stockFrom === 'gaps' ? 'Back to stock gaps' : 'Back to products');
     stockProduct = product;
     deliveryId = Till.newBatchId();
@@ -2687,15 +2866,40 @@
     });
   }
 
+  /* Turnover and Stock gaps open from Sales history or from the menu;
+     Back goes to whichever it was. */
+  var reportFrom = 'history';
+
+  function backFromReport() {
+    if (reportFrom === 'home') {
+      show('home');
+      refresh();
+    } else {
+      show('history');
+      loadHistory();
+    }
+  }
+
+  function setReportFrom(where) {
+    reportFrom = where;
+    var label = where === 'home' ? 'Back to menu' : 'Back to sales history';
+    $('tv-back').textContent = label;
+    $('gp-back').textContent = label;
+  }
+
   $('h-turnover').addEventListener('click', function () {
+    setReportFrom('history');
     show('turnover');
     loadTurnover();
   });
 
-  $('tv-back').addEventListener('click', function () {
-    show('history');
-    loadHistory();
+  $('go-turnover').addEventListener('click', function () {
+    setReportFrom('home');
+    show('turnover');
+    loadTurnover();
   });
+
+  $('tv-back').addEventListener('click', backFromReport);
 
   /* ---------- stock gaps and removals ---------- */
 
@@ -2767,14 +2971,18 @@
   }
 
   $('h-gaps').addEventListener('click', function () {
+    setReportFrom('history');
     show('gaps');
     loadGaps();
   });
 
-  $('gp-back').addEventListener('click', function () {
-    show('history');
-    loadHistory();
+  $('go-gaps').addEventListener('click', function () {
+    setReportFrom('home');
+    show('gaps');
+    loadGaps();
   });
+
+  $('gp-back').addEventListener('click', backFromReport);
 
   $('gp-list').addEventListener('click', function (event) {
     var row = event.target.closest ? event.target.closest('button.item') : null;
@@ -3268,10 +3476,14 @@
     navigator.serviceWorker.register('./service-worker.js');
   }
 
-  window.addEventListener('online', function () { showStatus(); showQr(); });
-  window.addEventListener('offline', function () { showStatus(); showQr(); });
+  window.addEventListener('online', function () { showStatus(); showQr(); showNet(); });
+  window.addEventListener('offline', function () { showStatus(); showQr(); showNet(); });
 
   showStatus();
+  showNet();
+  showClock();
+  setInterval(showClock, 15000);
+  setInterval(function () { if ($('screen-home').hidden) { showMenuDot(); } }, 10 * 60000);
   show('home');
 
   if (allCurrent()) {
@@ -3282,11 +3494,9 @@
     $('verdict').setAttribute('data-state', 'bad');
     $('verdict').textContent = 'The app is only half updated';
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';
-    $('go-sell').disabled = true;
-    $('go-history').disabled = true;
-    $('go-products').disabled = true;
-    $('go-shop').disabled = true;
-    $('go-backup').disabled = true;
+    Array.prototype.forEach.call(document.querySelectorAll('#screen-home button'), function (b) {
+      b.disabled = true;
+    });
   }
 </script>
 </body>
