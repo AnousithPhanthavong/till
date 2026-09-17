@@ -424,6 +424,23 @@
   .item .right .left, .item .right .tagline { display: block; }
   .nostock { color: var(--warn); }
 
+  /* removing stock (6d) */
+  .item.hasaction { padding-bottom: 6px; }
+  .rowaction { padding: 0 18px 13px; }
+  .rowaction button {
+    width: auto;
+    min-height: 44px;
+    padding: 8px 16px;
+    margin: 0;
+    font-size: 16px;
+  }
+  .field .rowaction { padding: 10px 0 0; }
+  .panel > .field:first-child { border-top: 0; }
+  .check label { flex: 1; }
+  .check label .sub { display: block; }
+  .check input[type="radio"] { accent-color: var(--brand); }
+  .item .moved { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
   footer {
     margin-top: 24px;
     font-size: 14px;
@@ -684,6 +701,11 @@
       <div id="st-list"><div class="empty">Reading…</div></div>
     </section>
 
+    <section class="panel" id="st-removed-panel" hidden>
+      <h2>Removed from stock, newest first</h2>
+      <div id="st-removed"></div>
+    </section>
+
     <section class="panel">
       <h2>Add a delivery</h2>
 
@@ -714,6 +736,66 @@
 
     <button id="st-save">Save delivery</button>
     <button id="st-back" class="secondary">Back to products</button>
+
+  </section>
+
+  <!-- ===================== REMOVE ITEMS (6d) ===================== -->
+  <section id="screen-remove" hidden>
+
+    <h1>Remove items</h1>
+    <p class="lede" id="rm-name"></p>
+    <p class="msg" id="rm-msg" hidden></p>
+
+    <section class="panel">
+      <h2>From this delivery</h2>
+      <div class="item">
+        <span class="who"><span class="nm" id="rm-title"></span><span class="sub" id="rm-sub"></span></span>
+        <span class="right"><span class="left" id="rm-left"></span><span id="rm-tag"></span></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="field">
+        <label for="rm-qty">How many to remove</label>
+        <input id="rm-qty" type="text" inputmode="numeric" autocomplete="off">
+        <p class="hint">Single items, not boxes.</p>
+        <div class="rowaction"><button type="button" id="rm-all" class="secondary">Remove all</button></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Reason</h2>
+      <div class="check">
+        <input id="rm-r-damaged" type="radio" name="rm-reason" value="damaged">
+        <label for="rm-r-damaged">Damaged
+          <span class="sub">Broken, dented, opened or dirty.</span></label>
+      </div>
+      <div class="check">
+        <input id="rm-r-expired" type="radio" name="rm-reason" value="expired">
+        <label for="rm-r-expired">Expired
+          <span class="sub">Past its date, or too close to its date to sell.</span></label>
+      </div>
+      <div class="check">
+        <input id="rm-r-miscounted" type="radio" name="rm-reason" value="miscounted">
+        <label for="rm-r-miscounted">Miscounted
+          <span class="sub">You counted fewer on the shelf than the app says.</span></label>
+      </div>
+      <div class="check">
+        <input id="rm-r-other" type="radio" name="rm-reason" value="other">
+        <label for="rm-r-other">Other
+          <span class="sub">Write a note below saying why.</span></label>
+      </div>
+      <div class="field">
+        <label for="rm-note" id="rm-note-label">Note (optional)</label>
+        <input id="rm-note" type="text" maxlength="60" autocomplete="off" enterkeyhint="done">
+        <p class="hint">60 characters at most.</p>
+      </div>
+    </section>
+
+    <p class="note">Removed items cannot be put back. If you remove too many by mistake, add them again as a new delivery.</p>
+
+    <button id="rm-save" class="quiet">Remove from stock</button>
+    <button id="rm-back" class="secondary">Back to stock</button>
 
   </section>
 
@@ -792,7 +874,7 @@
       'Internet <b>' + (navigator.onLine ? 'on' : 'off') + '</b> · ' +
       'Home Screen <b>' + (home ? 'yes' : 'no') + '</b> · ' +
       'Offline copy <b>' + (offlineCopy ? 'saved' : 'not yet') + '</b> · ' +
-      'Stock build 6d-1';
+      'Stock build 6d';
   }
 
   /* ---------- moving between the two screens ---------- */
@@ -807,6 +889,7 @@
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
     $('screen-stock').hidden = (which !== 'stock');
+    $('screen-remove').hidden = (which !== 'remove');
     window.scrollTo(0, 0);
   }
 
@@ -1747,6 +1830,8 @@
     $('st-list').innerHTML = '<div class="empty">Reading…</div>';
     var productId = stockProduct.id;
 
+    loadRemovals(productId);
+
     return Till.batchesForProduct(productId).then(function (batches) {
       if (!stockProduct || stockProduct.id !== productId) { return; }
       var total = 0;
@@ -1770,12 +1855,14 @@
         if (b.lot) { sub += ' · Lot ' + esc(b.lot); }
         if (b.costKip) { sub += ' · ' + Till.formatKip(b.costKip) + ' each'; }
         html +=
-          '<div class="item">' +
+          '<div class="item hasaction">' +
             '<span class="who"><span class="nm">' + title + '</span>' +
             '<span class="sub">' + sub + '</span></span>' +
             '<span class="right"><span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
               expiryTag(Till.expiryState(b.expiry, todayText)) + '</span>' +
-          '</div>';
+          '</div>' +
+          '<div class="rowaction"><button type="button" class="secondary" data-remove="' + esc(b.id) + '">' +
+            'Remove items</button></div>';
       });
       $('st-list').innerHTML = html;
     }).catch(function (err) {
@@ -1825,6 +1912,7 @@
   });
 
   $('st-back').addEventListener('click', function () {
+    say('st-msg', '', '');
     stockProduct = null;
     deliveryId = null;
     if (stockFrom === 'home') {
@@ -1835,6 +1923,160 @@
     say('p-msg', '', '');
     show('products');
     loadProducts();
+  });
+
+  /* ---------- removing stock (6d) ---------- */
+
+  var removeBatch = null;   /* the delivery being removed from */
+  var removalId = null;     /* made when the screen opens, so Save saves once */
+
+  var MAX_HISTORY = 20;
+
+  /* The "Removed from stock" list on the stock screen. */
+  function loadRemovals(productId) {
+    $('st-removed-panel').hidden = true;
+    $('st-removed').innerHTML = '';
+    return Till.removalsForProduct(productId).then(function (rows) {
+      if (!stockProduct || stockProduct.id !== productId || !rows.length) { return; }
+      var html = '';
+      rows.slice(0, MAX_HISTORY).forEach(function (r) {
+        var label = Till.REMOVAL_REASONS[r.reason] || r.reason;
+        var sub = Receipt.dateText(r.date) + ' · ' +
+          (r.expiry ? 'delivery expiring ' + Receipt.dateText(r.expiry) : 'delivery with no expiry date');
+        if (r.lot) { sub += ' · Lot ' + esc(r.lot); }
+        if (r.note) { sub += ' · ' + esc(r.note); }
+        html +=
+          '<div class="item">' +
+            '<span class="who"><span class="nm">' + plural(r.qty, 'item', 'items') + ' removed · ' + esc(label) + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="moved">' + r.qtyBefore + ' \u2192 ' + r.qtyAfter + '</span>' +
+          '</div>';
+      });
+      if (rows.length > MAX_HISTORY) {
+        html += '<div class="empty">' + plural(rows.length - MAX_HISTORY, 'older removal', 'older removals') + ' not shown.</div>';
+      }
+      $('st-removed').innerHTML = html;
+      $('st-removed-panel').hidden = false;
+    }).catch(function (err) {
+      $('st-removed').innerHTML = '<div class="empty">' + esc(err && err.message ? err.message : err) + '</div>';
+      $('st-removed-panel').hidden = false;
+    });
+  }
+
+  $('st-list').addEventListener('click', function (event) {
+    var btn = event.target.closest ? event.target.closest('button[data-remove]') : null;
+    if (!btn || !stockProduct) { return; }
+    /* Read the delivery again, so "left" is what is saved right now. */
+    Till.get('batches', btn.getAttribute('data-remove')).then(function (batch) {
+      if (!batch || batch.productId !== stockProduct.id || !(batch.qtyRemaining > 0)) {
+        say('st-msg', 'bad', 'That delivery has nothing left to remove.');
+        window.scrollTo(0, 0);
+        return loadStock();
+      }
+      openRemove(batch);
+    });
+  });
+
+  function checkedReason() {
+    var picked = document.querySelector('input[name="rm-reason"]:checked');
+    return picked ? picked.value : '';
+  }
+
+  function showNoteLabel() {
+    $('rm-note-label').textContent = checkedReason() === 'other' ? 'Note (needed for Other)' : 'Note (optional)';
+  }
+
+  function openRemove(batch) {
+    removeBatch = batch;
+    removalId = Till.newRemovalId();
+    var todayText = Till.localDate(new Date());
+    var e = Till.expiryState(batch.expiry, todayText);
+
+    $('rm-name').textContent = stockProduct.name;
+    $('rm-title').textContent = batch.expiry ? 'Expires ' + Receipt.dateText(batch.expiry) : 'No expiry date';
+    var sub = 'Received ' + Receipt.dateText(batch.receivedDate) +
+      ' · ' + batch.qtyReceived.toLocaleString('en-US') + ' arrived';
+    if (batch.lot) { sub += ' · Lot ' + batch.lot; }
+    $('rm-sub').textContent = sub;
+    $('rm-left').textContent = batch.qtyRemaining.toLocaleString('en-US') + ' left';
+    $('rm-tag').innerHTML = expiryTag(e);
+    $('rm-all').textContent = 'Remove all ' + batch.qtyRemaining.toLocaleString('en-US');
+
+    $('rm-qty').value = '';
+    $('rm-note').value = '';
+    document.querySelectorAll('input[name="rm-reason"]').forEach(function (r) {
+      /* An expired delivery starts with Expired picked. It can be changed. */
+      r.checked = (e.state === 'expired' && r.value === 'expired');
+    });
+    showNoteLabel();
+    $('rm-save').disabled = false;
+    say('rm-msg', '', '');
+    show('remove');
+  }
+
+  function closeRemove(message) {
+    removeBatch = null;
+    removalId = null;
+    say('st-msg', message ? 'good' : '', message || '');
+    show('stock');
+    loadStock();
+  }
+
+  $('rm-all').addEventListener('click', function () {
+    if (!removeBatch) { return; }
+    $('rm-qty').value = String(removeBatch.qtyRemaining);
+  });
+
+  document.querySelectorAll('input[name="rm-reason"]').forEach(function (r) {
+    r.addEventListener('change', showNoteLabel);
+  });
+
+  $('rm-save').addEventListener('click', function () {
+    if (!removeBatch || !removalId) { return; }
+    var qty = Till.toKip($('rm-qty').value);
+    var reason = checkedReason();
+    var label = Till.REMOVAL_REASONS[reason];
+
+    /* Ask once before anything irreversible, but only when the form looks
+       complete. Anything wrong is explained by the save itself. */
+    if (qty && label && /^[0-9,\s]+$/.test($('rm-qty').value.trim()) &&
+        qty <= removeBatch.qtyRemaining &&
+        !(reason === 'other' && !$('rm-note').value.trim())) {
+      if (!window.confirm('Remove ' + plural(qty, 'item', 'items') + ' of "' + stockProduct.name +
+          '" as ' + label + '? This cannot be undone.')) { return; }
+    }
+
+    $('rm-save').disabled = true;
+    Till.removeStock(removalId, {
+      batchId: removeBatch.id,
+      qty: $('rm-qty').value,
+      reason: reason,
+      note: $('rm-note').value
+    }).then(function (result) {
+      var r = result.removal;
+      closeRemove('Removed ' + plural(r.qty, 'item', 'items') + ' (' +
+        (Till.REMOVAL_REASONS[r.reason] || r.reason) + '). ' +
+        r.qtyAfter.toLocaleString('en-US') + ' left in that delivery.');
+      window.scrollTo(0, 0);
+    }).catch(function (err) {
+      say('rm-msg', 'bad', String(err && err.message ? err.message : err));
+      $('rm-save').disabled = false;
+      window.scrollTo(0, 0);
+    });
+  });
+
+  /* Enter in a box never saves by accident. */
+  ['rm-qty', 'rm-note'].forEach(function (id) {
+    $(id).addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.keyCode === 13) {
+        event.preventDefault();
+        event.target.blur();
+      }
+    });
+  });
+
+  $('rm-back').addEventListener('click', function () {
+    closeRemove('');
   });
 
   /* ---------- shop details ---------- */
