@@ -7,6 +7,7 @@
    Step 8b: checking a file before it is loaded.
    Step 8c: confirming a restore came out exactly like the file.
    Step 8d: the reminder on Home when a backup is due.
+   Step 9d: after "start fresh", a new backup is due at once.
 
    The file is JSON: plain text laid out so that a program can read it back
    exactly. At the top is a header saying what made it, when, and how many
@@ -318,11 +319,25 @@
     return n;
   }
 
+  /* The 'fresh' settings row if start fresh was used after the last
+     backup (so every backup file so far still holds the test data),
+     otherwise null. */
+  function afterFresh(data, note) {
+    var fresh = null;
+    ((data && data.settings) || []).forEach(function (r) {
+      if (r && r.key === 'fresh' && typeof r.at === 'string') { fresh = r; }
+    });
+    if (!fresh) { return null; }
+    var at = note && typeof note.at === 'string' ? note.at : '';
+    return fresh.at >= at ? fresh : null;
+  }
+
   /* What Home should say about backups.
      data: everything on the device (as from readAll).
      note: the saved { at, date } of the last backup, or null.
      Returns { state, days, changes }
-       state 'empty' - nothing on the device worth backing up
+       state 'fresh' - start fresh was used after the last backup (due)
+             'empty' - nothing on the device worth backing up
              'never' - data exists, no backup yet (due)
              'due'   - changes since, and REMINDER_DAYS or more old
              'ok'    - otherwise
@@ -333,6 +348,9 @@
     });
     var at = note && typeof note.at === 'string' ? note.at : '';
     var changes = changesSince(data || {}, at);
+    if (afterFresh(data, note)) {
+      return { state: 'fresh', days: null, changes: changes };
+    }
     if (!at) {
       return { state: hasData ? 'never' : 'empty', days: null, changes: changes };
     }
@@ -355,6 +373,7 @@
     REMINDER_DAYS: REMINDER_DAYS,
     changesSince: changesSince,
     reminder: reminder,
+    afterFresh: afterFresh,
     agoText: agoText,
     differences: differences,
     MAX_FILE_BYTES: MAX_FILE_BYTES,

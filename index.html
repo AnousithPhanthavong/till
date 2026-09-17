@@ -1084,7 +1084,7 @@
     return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
   }
   function backupIsCurrent() {
-    return typeof Backup !== 'undefined' && typeof Backup.reminder === 'function';
+    return typeof Backup !== 'undefined' && typeof Backup.afterFresh === 'function';
   }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
@@ -1092,7 +1092,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Fresh build 9d';
+  var BUILD = 'Fresh build 9d-2';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -1954,7 +1954,10 @@
       var r = Backup.reminder(got[0], got[1], Till.localDate(new Date()));
       var line = $('last-backup');
       var since = r.changes ? ' \u00B7 ' + plural(r.changes, 'change', 'changes') + ' since' : '';
-      if (r.state === 'empty') {
+      if (r.state === 'fresh') {
+        line.textContent = 'None since start fresh';
+        line.setAttribute('data-state', 'warn');
+      } else if (r.state === 'empty') {
         line.textContent = 'Nothing to back up yet';
         line.removeAttribute('data-state');
       } else if (r.state === 'never') {
@@ -1965,8 +1968,10 @@
         if (r.state === 'due') { line.setAttribute('data-state', 'warn'); }
         else { line.removeAttribute('data-state'); }
       }
-      $('backup-due').hidden = !(r.state === 'never' || r.state === 'due');
-      $('backup-due-text').textContent = r.state === 'never'
+      $('backup-due').hidden = !(r.state === 'never' || r.state === 'due' || r.state === 'fresh');
+      $('backup-due-text').textContent = r.state === 'fresh'
+        ? 'You started fresh. Your older backup files still hold the test sales, so make a new backup now. Tap Backup below.'
+        : r.state === 'never'
         ? 'This device has never been backed up. If it is lost or the app is deleted, everything is gone. Tap Backup below.'
         : 'The last backup was ' + Backup.agoText(r.days) + ' and ' + plural(r.changes, 'thing has', 'things have') +
           ' changed since. Tap Backup below.';
