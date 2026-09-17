@@ -638,6 +638,7 @@
     <div class="rc" id="r-paper"></div>
 
     <button id="r-print" disabled>Print</button>
+    <p class="msg" id="r-note" hidden></p>
     <button id="r-new" class="secondary">New sale</button>
     <button id="r-back" class="secondary">Back</button>
 
@@ -1070,7 +1071,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Offline build 9b';
+  var BUILD = 'Print build 9c';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -1664,13 +1665,34 @@
   /* Where Back goes from the receipt: 'done' or 'day'. */
   var receiptFrom = 'done';
 
+  /* The sale on the receipt screen, and the sales whose Print was tapped
+     since the app opened. Kept in memory only: a saved sale is never
+     changed, so prints are not recorded on it. */
+  var receiptSaleId = '';
+  var printTapped = {};
+
+  /* The browser cannot tell whether paper came out, so after the first
+     tap (or for any finished sale opened from history) the button says
+     Print again, and a note says the sale is safe. */
+  function showPrintState() {
+    var again = receiptFrom === 'day' || printTapped[receiptSaleId] === true;
+    $('r-print').textContent = again ? 'Print again' : 'Print';
+    if (printTapped[receiptSaleId] === true) {
+      say('r-note', 'good', 'The sale is saved. If no paper came out, check the printer is on, has paper and is plugged in, then tap Print again.');
+    } else {
+      say('r-note', '', '');
+    }
+  }
+
   function openReceipt(saleId, from) {
     receiptFrom = from || 'done';
+    receiptSaleId = saleId || '';
     $('r-back').textContent = receiptFrom === 'day' ? 'Back to the day' : 'Back';
     say('r-msg', '', '');
     $('r-paper').innerHTML = '';
     $('r-paper').hidden = true;
     $('r-print').disabled = true;
+    say('r-note', '', '');
     $('r-lede').textContent = 'Reading the saved sale…';
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('receipt');
@@ -1682,7 +1704,8 @@
       $('r-paper').innerHTML = Receipt.toHtml(r);
       $('r-paper').hidden = false;
       $('r-print').disabled = false;
-      $('r-lede').textContent = 'Show this to the customer, or tap Print.';
+      showPrintState();
+      $('r-lede').textContent = 'Show this to the customer, or tap ' + $('r-print').textContent + '.';
     }).catch(function (err) {
       $('r-lede').textContent = '';
       say('r-msg', 'bad', String(err && err.message ? err.message : err));
@@ -1716,7 +1739,10 @@
       window.print();
     } catch (err) {
       say('r-msg', 'bad', 'Printing could not start on this device.');
+      return;
     }
+    printTapped[receiptSaleId] = true;
+    showPrintState();
   });
 
   $('r-new').addEventListener('click', newSale);
