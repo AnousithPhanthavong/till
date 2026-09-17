@@ -501,8 +501,6 @@
     <button id="go-shop" class="secondary">Shop details</button>
     <button id="go-backup" class="secondary">Backup</button>
 
-    <button id="cleanup" class="quiet" hidden>Remove test data</button>
-
   </section>
 
   <!-- ====================== SELL SCREEN ===================== -->
@@ -943,6 +941,29 @@
     <p class="note" id="bk-keep"></p>
 
     <button id="bk-load" class="secondary">Check or load a backup file</button>
+
+    <section class="panel" id="fr-panel" hidden>
+      <h2>Start fresh before opening</h2>
+      <div class="row"><span id="fr-text"></span></div>
+      <div id="fr-rows">
+        <div class="row"><span>Sales to remove</span><span class="v" id="fr-sales">–</span></div>
+        <div class="row"><span>Sale lines to remove</span><span class="v" id="fr-saleLines">–</span></div>
+        <div class="row"><span>Deliveries to remove</span><span class="v" id="fr-batches">–</span></div>
+        <div class="row"><span>Removals to remove</span><span class="v" id="fr-removals">–</span></div>
+        <div class="row"><span>Products kept</span><span class="v" id="fr-products">–</span></div>
+        <div class="row"><span>Shop details</span><span class="v">Kept</span></div>
+      </div>
+      <div class="field" id="fr-typebox">
+        <label for="fr-words">Type START FRESH to go ahead</label>
+        <input id="fr-words" type="text" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <p class="hint">This cannot be undone. Receipt numbers start again at 1.</p>
+      </div>
+      <div class="btnpad">
+        <p class="msg" id="fr-msg" hidden></p>
+        <button id="fr-go" class="quiet" disabled>Start fresh</button>
+      </div>
+    </section>
+
     <button id="bk-back" class="secondary">Back to home</button>
 
   </section>
@@ -1050,7 +1071,7 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.keepCartText === 'function';
+    return typeof Till !== 'undefined' && typeof Till.startFresh === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
@@ -1071,7 +1092,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Print build 9c';
+  var BUILD = 'Fresh build 9d';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2022,12 +2043,6 @@
       return Till.expiryAlerts();
     }).then(function (alerts) {
       showExpiry(alerts);
-      return Till.findSelfTestData();
-    }).then(function (test) {
-      $('cleanup').hidden = test.total === 0;
-      $('cleanup').textContent = test.saleIds.length
-        ? 'Remove test data (' + plural(test.saleIds.length, 'test sale', 'test sales') + ')'
-        : 'Remove test data';
     }).catch(function (err) {
       $('verdict').setAttribute('data-state', 'bad');
       $('verdict').textContent = 'The till cannot read its data';
@@ -2834,7 +2849,7 @@
     if (!backupMeta) { return; }
     var meta = { fileName: backupFile ? backupFile.name : '', how: how,
       counts: backupMeta.counts, salesKip: backupMeta.salesKip };
-    Till.saveBackupNote(meta).catch(function (err) {
+    Till.saveBackupNote(meta).then(showFresh).catch(function (err) {
       say('bk-msg', 'bad', 'The file was handed over, but the app could not remember the backup time: ' + errText(err));
     });
   }
@@ -2880,7 +2895,10 @@
     showBackupCounts(null);
     $('bk-make').disabled = false;
     $('bk-keep').textContent = '';
+    $('fr-words').value = '';
+    say('fr-msg', '', '');
     show('backup');
+    showFresh();
     Till.keepDataSafe().then(function (answer) {
       $('bk-keep').textContent = answer === 'yes'
         ? 'This browser has agreed not to clear the till\u2019s data on its own. Backups are still needed.'
@@ -2919,6 +2937,90 @@
       say('bk-msg', 'bad', errText(err));
     }).then(function () {
       $('bk-make').disabled = false;
+    });
+  });
+
+  /* ---------- start fresh before opening (9d) ---------- */
+
+  var freshAllowed = false;
+
+  function freshWordsTyped() {
+    return $('fr-words').value.trim() === Till.FRESH_WORDS;
+  }
+
+  function freshButton() {
+    $('fr-go').disabled = !(freshAllowed && freshWordsTyped());
+  }
+
+  /* Reads the till and shows the section: locked, waiting for a backup,
+     or ready. Changes nothing. */
+  function showFresh() {
+    freshAllowed = false;
+    freshButton();
+    return Till.freshStatus().then(function (st) {
+      $('fr-panel').hidden = false;
+      var f = st.freshNote;
+      if (f) {
+        var r = f.removed || {};
+        $('fr-text').textContent = 'Done on ' + Receipt.dateText(f.date) + ': ' +
+          plural(r.sales || 0, 'sale', 'sales') + ', ' +
+          plural(r.batches || 0, 'delivery', 'deliveries') + ' and ' +
+          plural(r.removals || 0, 'removal', 'removals') + ' were removed. This can only be done once.';
+        $('fr-rows').hidden = true;
+        $('fr-typebox').hidden = true;
+        $('fr-go').hidden = true;
+        return;
+      }
+      $('fr-rows').hidden = false;
+      $('fr-typebox').hidden = false;
+      $('fr-go').hidden = false;
+      $('fr-text').textContent = 'Use this once, just before the shop opens, on the till you will sell from. ' +
+        'It removes all test sales, deliveries and removals. Your products and shop details stay.';
+      ['sales', 'saleLines', 'batches', 'removals', 'products'].forEach(function (t) {
+        $('fr-' + t).textContent = String(st.counts[t]);
+      });
+      freshAllowed = !st.problem;
+      say('fr-msg', st.problem ? 'warn' : '', st.problem || '');
+      freshButton();
+    }).catch(function (err) {
+      $('fr-panel').hidden = false;
+      say('fr-msg', 'bad', 'Could not read the till: ' + errText(err));
+    });
+  }
+
+  $('fr-words').addEventListener('input', freshButton);
+
+  /* Enter in the box only closes the keyboard; it never starts anything. */
+  $('fr-words').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      $('fr-words').blur();
+    }
+  });
+
+  $('fr-go').addEventListener('click', function () {
+    if (!freshAllowed || !freshWordsTyped()) { return; }
+    $('fr-go').disabled = true;
+    freshAllowed = false;
+    say('fr-msg', '', 'Removing…');
+    Till.startFresh($('fr-words').value).then(function (result) {
+      /* The cart on the Sell screen too, so nothing old comes back. */
+      cart = Sell.emptyCart();
+      paySaleId = null;
+      clearBackupFile();
+      $('bk-heading').textContent = 'What goes in';
+      showBackupCounts(null);
+      $('fr-words').value = '';
+      return showFresh().then(function () {
+        say('fr-msg', 'good', 'Started fresh. ' +
+          plural(result.removed.sales, 'sale', 'sales') + ' removed, ' +
+          plural(result.products, 'product', 'products') + ' kept. ' +
+          'Now make a new backup: older backup files still hold the test sales.');
+      });
+    }).catch(function (err) {
+      return showFresh().then(function () {
+        say('fr-msg', 'bad', errText(err));
+      });
     });
   });
 
@@ -3157,28 +3259,6 @@
     $('go-backup').click();
   });
 
-  /* Removes only what the old "Save a test sale" button made.
-     Real products are left alone. */
-  $('cleanup').addEventListener('click', function () {
-    if (!window.confirm('Remove the test product "Test formula 800g" and its test sales? Your own products are not touched.')) { return; }
-    $('cleanup').disabled = true;
-    Till.removeSelfTestData()
-      .then(function (removed) {
-        return refresh().then(function () {
-          $('verdict').setAttribute('data-state', 'good');
-          $('verdict').textContent = 'Test data removed';
-          $('lede').textContent = plural(removed.saleIds.length, 'test sale', 'test sales') +
-            ' and the test product are gone. Your own products are still here.';
-        });
-      })
-      .catch(function (err) {
-        $('verdict').setAttribute('data-state', 'bad');
-        $('verdict').textContent = 'Test data was not removed';
-        $('lede').textContent = String(err && err.message ? err.message : err);
-      })
-      .then(function () { $('cleanup').disabled = false; });
-  });
-
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js');
   }
@@ -3202,7 +3282,6 @@
     $('go-products').disabled = true;
     $('go-shop').disabled = true;
     $('go-backup').disabled = true;
-    $('cleanup').hidden = true;
   }
 </script>
 </body>
