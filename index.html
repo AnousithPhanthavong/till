@@ -1369,6 +1369,7 @@
   .imstats .stat.skip .v { color: var(--warn); }
   .imstats .stat.bad .v { color: var(--bad); }
   #im-add-list .item .sub .chip { margin-left: 6px; }
+  #im-go-panel .btnpad { padding-bottom: 18px; }
 
   .dangerzone { border: 2px solid #EFC2BC; background: #FFF7F6; }
   .dzhead { display: flex; align-items: center; gap: 12px; padding: 16px 18px 4px; }
@@ -1977,6 +1978,15 @@
       </div>
     </section>
 
+    <section class="panel restorecard" id="im-go-panel" hidden>
+      <h2>Add to the till</h2>
+      <p class="dztext" id="im-go-text"></p>
+      <div class="btnpad">
+        <button id="im-save" class="bigsave moneybtn"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span id="im-save-text">Add products</span></button>
+      </div>
+    </section>
+    <button id="im-done" class="bigsave" hidden>See products</button>
+
     <section class="panel alert findings bad" id="im-bad-panel" hidden>
       <h2>Fix these in the spreadsheet</h2>
       <div id="im-bad"></div>
@@ -2453,7 +2463,8 @@
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
     return typeof Till !== 'undefined' && typeof Till.startFresh === 'function' &&
-      typeof Till.deleteProduct === 'function' && typeof Till.voidSale === 'function';
+      typeof Till.deleteProduct === 'function' && typeof Till.voidSale === 'function' &&
+      typeof Till.importProducts === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
@@ -2479,7 +2490,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Import build 13a';
+  var BUILD = 'Import build 13b';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -3594,8 +3605,12 @@
 
   function resetImport() {
     say('im-msg', '', '');
-    ['im-summary', 'im-bad-panel', 'im-notes-panel', 'im-add-panel', 'im-skip-panel', 'im-template-msg']
-      .forEach(function (id) { $(id).hidden = true; });
+    ['im-summary', 'im-bad-panel', 'im-notes-panel', 'im-add-panel', 'im-skip-panel', 'im-template-msg',
+      'im-go-panel', 'im-done'].forEach(function (id) { $(id).hidden = true; });
+    importRows = null;
+    importId = '';
+    $('im-save').disabled = false;
+    $('im-file').value = '';
     ['im-bad', 'im-notes', 'im-add-list', 'im-skip'].forEach(function (id) { $(id).innerHTML = ''; });
   }
 
@@ -3643,6 +3658,11 @@
   });
 
   var IMPORT_SHOW_MAX = 200;
+
+  /* The rows that passed the check, waiting for Add. Memory only. The id
+     is made when the file is checked, so a double tap adds them once. */
+  var importRows = null;
+  var importId = '';
 
   function importRowsHtml(rows, withWhy) {
     var html = rows.slice(0, IMPORT_SHOW_MAX).map(function (r) {
@@ -3706,6 +3726,16 @@
         }
         $('im-add-list').innerHTML = html;
         $('im-add-panel').hidden = false;
+
+        importRows = add.map(function (x) {
+          return { rowNo: x.rowNo, name: x.name, priceKip: x.priceKip, barcode: x.barcode, tracksExpiry: x.tracksExpiry };
+        });
+        importId = Till.newImportId();
+        $('im-save-text').textContent = 'Add ' + plural(add.length, 'product', 'products');
+        $('im-go-text').textContent = (bad.length
+          ? 'Rows that need fixing are left out. Fix them in the spreadsheet and check the same file again later: products already added are then skipped. '
+          : '') + 'Stock is not added; that comes later as deliveries.';
+        $('im-go-panel').hidden = false;
       }
 
       say('im-msg', add.length ? (bad.length ? 'warn' : 'good') : 'bad',
@@ -3713,12 +3743,42 @@
           ? plural(add.length, 'product is', 'products are') + ' ready to add' +
             (bad.length ? '; ' + plural(bad.length, 'row needs', 'rows need') + ' fixing first or will be left out' : '') + '.'
           : 'Nothing in this file can be added.') +
-        ' Nothing has been saved (importing comes in the next step).');
+        ' Nothing has been saved yet.');
     }).catch(function (err) {
       say('im-msg', 'bad', errText(err));
     }).then(function () {
       $('im-pick').disabled = false;
     });
+  });
+
+  $('im-save').addEventListener('click', function () {
+    if (!importRows || !importId) { return; }
+    var n = importRows.length;
+    if (!window.confirm('Add ' + plural(n, 'product', 'products') + ' to the till?\n\n' +
+        'Each one can be deleted later on its Edit screen, as long as nothing has been sold or delivered for it.')) { return; }
+    $('im-save').disabled = true;
+    $('im-pick').disabled = true;
+    say('im-msg', 'good', 'Adding ' + plural(n, 'product', 'products') + '…');
+    Till.importProducts(importId, importRows).then(function (r) {
+      var fileName = $('im-name').textContent;
+      resetImport();
+      say('im-msg', 'good', r.already
+        ? 'These products were already added. Nothing new was saved.'
+        : plural(r.added, 'product', 'products') + ' added from ' + fileName + ' and checked. Make a backup soon.');
+      $('im-done').hidden = false;
+    }).catch(function (err) {
+      say('im-msg', 'bad', errText(err));
+      $('im-save').disabled = false;
+    }).then(function () {
+      $('im-pick').disabled = false;
+    });
+  });
+
+  $('im-done').addEventListener('click', function () {
+    resetImport();
+    $('p-search').value = '';
+    show('products');
+    loadProducts();
   });
 
   /* ---------- the home screen ---------- */

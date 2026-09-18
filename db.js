@@ -398,6 +398,127 @@
     });
   }
 
+  /* ---------- importing products (Step 13b) ----------
+     Adds many new products in one all-or-nothing save: either every row
+     goes in, or none does. Only adds; an existing product is never
+     changed. Product ids come from the import id plus the row number, so
+     tapping Import twice (or a retry) adds them once. */
+
+  var MAX_IMPORT_ROWS = 3000;
+  var MAX_IMPORT_NAME = 80;
+
+  function newImportId() { return newId('imp'); }
+
+  function importKey(name) { return String(name || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+
+  /* Pure: the first reason these rows cannot be imported into a till
+     holding `existing` products, or '' if they can. */
+  function importProblem(rows, existing) {
+    if (!Array.isArray(rows) || rows.length === 0) { return 'There is nothing to import.'; }
+    if (rows.length > MAX_IMPORT_ROWS) { return 'Too many products at once (' + MAX_IMPORT_ROWS + ' at most).'; }
+    var names = {};
+    var codes = {};
+    (existing || []).forEach(function (p) {
+      if (!p) { return; }
+      names[importKey(p.name)] = p.name;
+      if (p.active !== false && p.barcode) { codes[p.barcode] = p.name; }
+    });
+    for (var i = 0; i < rows.length; i += 1) {
+      var r = rows[i] || {};
+      var label = 'Row ' + r.rowNo + ': ';
+      var name = String(r.name || '').trim().replace(/\s+/g, ' ');
+      var barcode = String(r.barcode || '').replace(/\s+/g, '');
+      if (!Number.isInteger(r.rowNo) || r.rowNo < 2) { return 'A row has no row number.'; }
+      if (!name || name !== r.name) { return label + 'the name is empty or untidy.'; }
+      if (name.length > MAX_IMPORT_NAME) { return label + 'the name is too long.'; }
+      if (barcode !== String(r.barcode || '')) { return label + 'the barcode has spaces.'; }
+      if (!Number.isInteger(r.priceKip) || r.priceKip < 500 || r.priceKip % 500 !== 0) {
+        return label + 'the price is not a whole number of kip rounded to 500.';
+      }
+      if (typeof r.tracksExpiry !== 'boolean') { return label + 'the expiry tick is unclear.'; }
+      var k = importKey(name);
+      if (names[k] !== undefined) { return label + '"' + name + '" is already in the till.'; }
+      names[k] = name;
+      if (barcode) {
+        if (codes[barcode] !== undefined) { return label + 'barcode ' + barcode + ' is already on "' + codes[barcode] + '".'; }
+        codes[barcode] = name;
+      }
+    }
+    return '';
+  }
+
+  function importedRecord(importId, r, nowIso) {
+    return {
+      id: 'prod_' + importId + '_' + r.rowNo,
+      barcode: String(r.barcode || ''),
+      name: r.name,
+      costKip: 0,
+      priceKip: r.priceKip,
+      tracksExpiry: r.tracksExpiry,
+      active: true,
+      createdAt: nowIso,
+      importId: importId
+    };
+  }
+
+  /* rows: [{rowNo, name, priceKip, barcode, tracksExpiry}] — the rows the
+     check marked "add". Resolves to {added, already}. */
+  function importProducts(importId, rows) {
+    if (!/^imp_[a-z0-9_]+$/.test(String(importId || ''))) {
+      return Promise.reject(new Error('The import has no id. Check the file again.'));
+    }
+    var nowIso = new Date().toISOString();
+    var records = (rows || []).map(function (r) { return importedRecord(importId, r || {}, nowIso); });
+    var refused = null;
+    var already = false;
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['products'], 'readwrite');
+        var store = t.objectStore('products');
+        store.getAll().onsuccess = function (e) {
+          var existing = e.target.result || [];
+          /* Same import saved before: say so, add nothing. */
+          var mine = existing.filter(function (p) { return p && p.importId === importId; });
+          if (mine.length) {
+            if (mine.length === records.length) { already = true; return; }
+            refused = new Error('Part of this import is already saved. Nothing more was added.');
+            t.abort();
+            return;
+          }
+          /* Every check again, against what is saved right now. */
+          var problem = importProblem(rows, existing);
+          if (problem) {
+            refused = new Error(problem + ' Nothing was added.');
+            t.abort();
+            return;
+          }
+          records.forEach(function (rec) { store.add(rec); });
+        };
+        t.oncomplete = function () { resolve(true); };
+        t.onerror = function () {};
+        t.onabort = function () {
+          reject(refused || new Error('The products could not be saved. Nothing was added.'));
+        };
+      });
+    }).then(function () {
+      /* Prove it: read every one back and compare. */
+      return getAll('products').then(function (saved) {
+        var byId = {};
+        saved.forEach(function (p) { byId[p.id] = p; });
+        var wrong = records.filter(function (rec) {
+          var got = byId[rec.id];
+          return !got || got.name !== rec.name || got.priceKip !== rec.priceKip ||
+            got.barcode !== rec.barcode || got.tracksExpiry !== rec.tracksExpiry || got.active !== true;
+        });
+        if (wrong.length) {
+          return Promise.reject(new Error(wrong.length + ' imported products could not be read back. Close the app, open it and look at Products.'));
+        }
+        return { added: already ? 0 : records.length, already: already };
+      });
+    });
+  }
+
   /* ---------- removing the old test data ----------
      Early versions had a "Save a test sale" button. It made a product called
      "Test formula 800g" (barcode 8850000000001), two batches and test sales.
@@ -1750,6 +1871,10 @@
     deleteProblem: deleteProblem,
     productHistory: productHistory,
     deleteProduct: deleteProduct,
+    importProducts: importProducts,
+    importProblem: importProblem,
+    newImportId: newImportId,
+    MAX_IMPORT_ROWS: MAX_IMPORT_ROWS,
     FRESH_WORDS: FRESH_WORDS,
     FRESH_BACKUP_MINUTES: FRESH_BACKUP_MINUTES,
     freshProblem: freshProblem,
