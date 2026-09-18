@@ -1147,6 +1147,10 @@
     background: var(--bad);
   }
   button.danger:active { background: #7C2217; }
+  #f-del-panel { margin-top: 28px; }
+  #f-del-panel .danger { width: 100%; margin-top: 8px; }
+  #f-del-panel .hint, #f-del-panel .danger { margin-left: 16px; margin-right: 16px; width: calc(100% - 32px); }
+  #f-del-panel { padding-bottom: 16px; }
 
   /* ---------- Sales history, Day, Turnover, Stock gaps (10a-5) ---------- */
   main > #screen-history, main > #screen-gaps { max-width: 72rem; }
@@ -1895,6 +1899,12 @@
     <button id="f-save" class="bigsave">Save product</button>
     <button id="f-stock" class="stockbtn" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Stock and deliveries</button>
 
+    <section class="panel dangerzone" id="f-del-panel" hidden>
+      <h2>Delete this product</h2>
+      <p class="hint" id="f-del-note">Checking…</p>
+      <button type="button" id="f-delete" class="danger" hidden>Delete product</button>
+    </section>
+
   </section>
 
   <!-- ================= STOCK AND DELIVERIES ================= -->
@@ -2285,7 +2295,8 @@
   /* index.html and db.js have to be the same version. If the device kept an
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
-    return typeof Till !== 'undefined' && typeof Till.startFresh === 'function';
+    return typeof Till !== 'undefined' && typeof Till.startFresh === 'function' &&
+      typeof Till.deleteProduct === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
@@ -2306,7 +2317,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Lock build 10b-2b';
+  var BUILD = 'Delete build 11';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -3480,6 +3491,7 @@
     $('f-expiry').checked = product ? !!product.tracksExpiry : false;
 
     $('f-stock').hidden = !product;
+    showDeletePanel(product);
 
     say('f-msg', '', '');
     $('f-save').disabled = false;
@@ -3532,6 +3544,62 @@
       say('f-msg', 'bad', String(err && err.message ? err.message : err));
     }).then(function () {
       $('f-save').disabled = false;
+    });
+  });
+
+  /* ---------- deleting a product (Step 11) ----------
+     Only products with nothing on record. db.js checks again inside the
+     delete itself; this screen check is just to explain it up front. */
+
+  /* True if the cart on screen, or the cart kept on the device, holds it. */
+  function productInCart(productId) {
+    var inMemory = cart.lines.some(function (l) { return l.productId === productId; });
+    var copy = Sell.readCartCopy(Till.keptCartText());
+    var kept = !!(copy && copy.ok && copy.cart.lines.some(function (l) { return l.productId === productId; }));
+    return inMemory || kept;
+  }
+
+  function showDeletePanel(product) {
+    $('f-del-panel').hidden = !product;
+    $('f-delete').hidden = true;
+    $('f-delete').disabled = false;
+    if (!product) { return; }
+    $('f-del-note').textContent = 'Checking…';
+    var id = product.id;
+    Till.productHistory(id).then(function (h) {
+      if (editingId !== id) { return; }
+      var problem = Till.deleteProblem(h);
+      if (problem) {
+        $('f-del-note').textContent = problem + ' Its history must stay.';
+      } else {
+        $('f-del-note').textContent = 'Nothing is recorded against this product. Deleting it cannot be undone.';
+        $('f-delete').hidden = false;
+      }
+    }).catch(function () {
+      if (editingId !== id) { return; }
+      $('f-del-note').textContent = 'Could not check this product. Close the form and open it again.';
+    });
+  }
+
+  $('f-delete').addEventListener('click', function () {
+    var id = editingId;
+    if (!id) { return; }
+    var name = $('f-name').value.trim() || 'this product';
+    if (productInCart(id)) {
+      say('f-msg', 'bad', 'This product is in the cart on the Sell screen. Remove it from the cart first.');
+      return;
+    }
+    if (!window.confirm('Delete "' + name + '"?\n\nThis cannot be undone.')) { return; }
+    $('f-delete').disabled = true;
+    say('f-msg', '', '');
+    Till.deleteProduct(id).then(function () {
+      editingId = null;
+      say('p-msg', 'good', 'Deleted: ' + name);
+      show('products');
+      return loadProducts();
+    }).catch(function (err) {
+      say('f-msg', 'bad', String(err && err.message ? err.message : err));
+      $('f-delete').disabled = false;
     });
   });
 

@@ -316,6 +316,88 @@
     });
   }
 
+  /* ---------- deleting a product (Step 11) ----------
+     Only a product with nothing recorded against it can be deleted: no
+     deliveries, no sale lines, no removals. Anything else would leave
+     records pointing at a product that is gone. After start fresh the test
+     products have no history, so they can be deleted then. */
+
+  /* Pure: the reason a product cannot be deleted, or '' if it can. */
+  function deleteProblem(h) {
+    var parts = [];
+    if (h.saleLines) { parts.push(h.saleLines + (h.saleLines === 1 ? ' sale' : ' sales')); }
+    if (h.deliveries) { parts.push(h.deliveries + (h.deliveries === 1 ? ' delivery' : ' deliveries')); }
+    if (h.removals) { parts.push(h.removals + (h.removals === 1 ? ' removal' : ' removals')); }
+    if (!parts.length) { return ''; }
+    return 'It has ' + parts.join(', ') + ' on record, so it cannot be deleted.';
+  }
+
+  /* Counts what is recorded against one product, inside a transaction
+     that is already open (so the check and the delete see the same data). */
+  function countHistory(t, productId, done) {
+    var h = { deliveries: 0, saleLines: 0, removals: 0 };
+    var waiting = 3;
+    function one() { waiting -= 1; if (waiting === 0) { done(h); } }
+    t.objectStore('batches').index('productId').count(productId).onsuccess =
+      function (e) { h.deliveries = e.target.result; one(); };
+    t.objectStore('removals').index('productId').count(productId).onsuccess =
+      function (e) { h.removals = e.target.result; one(); };
+    /* Sale lines have no product index; a small shop's lines are few. */
+    t.objectStore('saleLines').getAll().onsuccess = function (e) {
+      h.saleLines = e.target.result.filter(function (l) { return l.productId === productId; }).length;
+      one();
+    };
+  }
+
+  function productHistory(productId) {
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['batches', 'saleLines', 'removals'], 'readonly');
+        var result = null;
+        countHistory(t, productId, function (h) { result = h; });
+        t.oncomplete = function () { resolve(result); };
+        t.onerror = function () { reject(t.error); };
+      });
+    });
+  }
+
+  function deleteProduct(productId) {
+    var names = ['products', 'batches', 'saleLines', 'removals'];
+    var refused = null;
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(names, 'readwrite');
+        t.objectStore('products').get(productId).onsuccess = function (e) {
+          if (!e.target.result) {
+            refused = new Error('That product is no longer saved.');
+            t.abort();
+            return;
+          }
+          countHistory(t, productId, function (h) {
+            var problem = deleteProblem(h);
+            if (problem) {
+              refused = new Error(problem + ' Nothing was deleted.');
+              t.abort();
+              return;
+            }
+            t.objectStore('products').delete(productId);
+          });
+        };
+        t.oncomplete = function () { resolve(true); };
+        t.onerror = function () {};
+        t.onabort = function () {
+          reject(refused || new Error('The product could not be deleted. Nothing was changed.'));
+        };
+      });
+    }).then(function () {
+      /* Prove it: read it back. */
+      return get('products', productId).then(function (left) {
+        if (left) { return Promise.reject(new Error('The product is still there. Close the app and try again.')); }
+        return true;
+      });
+    });
+  }
+
   /* ---------- removing the old test data ----------
      Early versions had a "Save a test sale" button. It made a product called
      "Test formula 800g" (barcode 8850000000001), two batches and test sales.
@@ -1431,6 +1513,9 @@
   }
 
   global.Till = {
+    deleteProblem: deleteProblem,
+    productHistory: productHistory,
+    deleteProduct: deleteProduct,
     FRESH_WORDS: FRESH_WORDS,
     FRESH_BACKUP_MINUTES: FRESH_BACKUP_MINUTES,
     freshProblem: freshProblem,
