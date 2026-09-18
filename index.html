@@ -569,6 +569,8 @@
   .rc-count { margin-bottom: 4px; }
   .rc-strong { font-size: 19px; font-weight: 700; margin: 2px 0 4px; }
   .rc-thanks { text-align: center; font-size: 17px; margin-top: 4px; }
+  .rc-void { text-align: center; font-size: 20px; font-weight: 800; letter-spacing: 1px;
+    border: 2px solid #000; border-radius: 4px; padding: 4px 6px; margin: 8px 0 2px; }
 
   /* ---------- printing: only the receipt, on 80mm paper ----------
      An 80mm roll prints about 72mm wide, so the receipt is 72mm with a
@@ -582,6 +584,7 @@
   body.measuring .rc-shop { font-size: 14pt; }
   body.measuring .rc-strong { font-size: 13pt; }
   body.measuring .rc-thanks { font-size: 11pt; }
+  body.measuring .rc-void { font-size: 14pt; }
 
   @media print {
     @page { margin: 0; }
@@ -608,6 +611,7 @@
     .rc-shop { font-size: 14pt; }
     .rc-strong { font-size: 13pt; }
     .rc-thanks { font-size: 11pt; }
+    .rc-void { font-size: 14pt; border: 2px solid #000 !important; }
     .rc-rule { border-top: 1px dashed #000; }
   }
 
@@ -970,6 +974,8 @@
   #vd-save { width: 100%; }
   #vd-what { padding: 0 18px; margin: 6px 0 0; color: var(--ink); line-height: 1.5; }
   .r-actions button[hidden] { display: none; }
+  .rcard.voided .price { text-decoration: line-through; color: var(--muted, #8a7a80); }
+  .rcard.voided .price .chev { display: inline-block; text-decoration: none; }
   @media (min-width: 900px) {
     #screen-receipt:not([hidden]) {
       display: grid;
@@ -1858,6 +1864,7 @@
       <button type="button" id="dy-back" class="backpill chevback">Back to sales history</button>
     </div>
     <p class="msg" id="dy-msg" hidden></p>
+    <p class="msg" id="dy-void-msg" hidden></p>
 
     <div class="herocard pink">
       <span class="lbl">Total</span>
@@ -2363,11 +2370,13 @@
     return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
   }
   function receiptIsCurrent() {
-    return typeof Receipt !== 'undefined' && typeof Receipt.shopLines === 'function';
+    return typeof Receipt !== 'undefined' && typeof Receipt.shopLines === 'function' &&
+      !!Receipt.WORDS && Receipt.WORDS.void === 'VOID';
   }
 
   function reportIsCurrent() {
-    return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function';
+    return typeof Report !== 'undefined' && typeof Report.stockGaps === 'function' &&
+      typeof Report.voidsBySale === 'function';
   }
   function backupIsCurrent() {
     return typeof Backup !== 'undefined' && typeof Backup.afterFresh === 'function';
@@ -2378,7 +2387,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Void build 12a';
+  var BUILD = 'Void build 12b';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -3100,10 +3109,10 @@
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
     show('receipt');
 
-    Promise.all([Till.getSale(saleId), Till.getShop()]).then(function (got) {
+    Promise.all([Till.getSale(saleId), Till.getShop(), Till.voidFor(saleId)]).then(function (got) {
       var found = got[0];
       if (!found) { throw new Error('This sale could not be found.'); }
-      var r = Receipt.build(found.sale, found.lines, got[1]);
+      var r = Receipt.build(found.sale, found.lines, got[1], got[2]);
       $('r-paper').innerHTML = Receipt.toHtml(r);
       $('r-paper').hidden = false;
       $('r-print').disabled = false;
@@ -4256,6 +4265,7 @@
               (d.date === today ? '<span class="chip today">Today</span>' : '') +
               '<span class="chip plain">' + plural(d.count, 'sale', 'sales') + '</span>' +
               moneyChips(d.cashKip, d.qrKip) +
+              (d.voidCount ? '<span class="chip bad">' + d.voidCount + ' voided</span>' : '') +
             '</span></span>' +
             '<span class="price">' + Till.formatKip(d.totalKip) +
               '<span class="chev">\u203A</span></span>' +
@@ -4296,6 +4306,7 @@
   function loadDay() {
     var date = historyDate;
     say('dy-msg', '', '');
+    say('dy-void-msg', '', '');
     $('dy-title').textContent = dayLabel(date);
     ['dy-total', 'dy-cash', 'dy-qr', 'dy-count', 'dy-items'].forEach(function (id) {
       $(id).textContent = '–';
@@ -4311,6 +4322,11 @@
         return s && s.type === 'sale' && s.date === date && !Report.isCountable(s);
       }).length;
       say('dy-msg', 'bad', skippedNote(skipped));
+      var voids = Report.voidsBySale(sales);
+      say('dy-void-msg', 'warn', t.voidCount
+        ? plural(t.voidCount, 'sale was', 'sales were') + ' voided (' + Till.formatKip(t.voidKip) +
+          '). Not in these totals.'
+        : '');
 
       $('dy-total').textContent = Till.formatKip(t.totalKip);
       $('dy-cash').textContent = Till.formatKip(t.cashKip);
@@ -4324,6 +4340,7 @@
         var hours = {};
         var first = 7, last = 21;
         list.forEach(function (s) {
+          if (voids[s.id]) { return; }
           var h = new Date(s.at).getHours();
           var b = hours[h] || (hours[h] = { cashKip: 0, qrKip: 0, count: 0 });
           if (s.method === 'cash') { b.cashKip += s.totalKip; } else { b.qrKip += s.totalKip; }
@@ -4349,11 +4366,13 @@
       }
       var html = '';
       list.forEach(function (s) {
+        var voided = !!voids[s.id];
         html +=
-          '<button type="button" class="item rcard" data-id="' + esc(s.id) + '">' +
+          '<button type="button" class="item rcard' + (voided ? ' voided' : '') + '" data-id="' + esc(s.id) + '">' +
             '<span class="timetile" aria-hidden="true">' + timeOf(s.at) + '</span>' +
             '<span class="who"><span class="nm">No. ' + s.number + '</span>' +
             '<span class="chips">' +
+              (voided ? '<span class="chip bad">Voided</span>' : '') +
               (s.method === 'cash' ? '<span class="chip ok">Cash</span>' : '<span class="chip qr">QR</span>') +
               '<span class="chip plain">' + plural(s.itemCount, 'item', 'items') + '</span>' +
             '</span></span>' +
@@ -4395,7 +4414,8 @@
       var months = Report.monthTotals(sales, today);
 
       $('tv-lede').textContent = 'From ' + Receipt.dateText(year.from) +
-        ' to ' + Receipt.dateText(year.to) + ', today included.';
+        ' to ' + Receipt.dateText(year.to) + ', today included.' +
+        (year.voidCount ? ' ' + plural(year.voidCount, 'voided sale', 'voided sales') + ' not counted.' : '');
       $('tv-year').textContent = Till.formatKip(year.totalKip);
       $('tv-cash').textContent = Till.formatKip(year.cashKip);
       $('tv-qr').textContent = Till.formatKip(year.qrKip);

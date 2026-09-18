@@ -19,7 +19,8 @@
     change: '\u0EC0\u0E87\u0EB4\u0E99\u0E97\u0EAD\u0E99',             // ເງິນທອນ (change)
     qr: 'QR',
     reference: 'Ref',
-    thanks: '\u0E82\u0EAD\u0E9A\u0EC3\u0E88'                          // ຂອບໃຈ (thank you)
+    thanks: '\u0E82\u0EAD\u0E9A\u0EC3\u0E88',                         // ຂອບໃຈ (thank you)
+    void: 'VOID'
   };
 
   var DEFAULT_SHOP_NAME = '(Shop name)';
@@ -49,8 +50,10 @@
 
   /* Works out everything on the receipt from a saved sale.
      Refuses (throws) if the saved sale does not add up, so a wrong
-     receipt is never shown or printed. */
-  function build(sale, lines, shop) {
+     receipt is never shown or printed.
+     voidRecord (optional, Step 12): the void of this sale, if any. The
+     receipt then carries a VOID mark with the date and time of the void. */
+  function build(sale, lines, shop, voidRecord) {
     if (!sale || sale.type !== 'sale' || !Number.isInteger(sale.number)) {
       throw new Error('This sale could not be found.');
     }
@@ -108,6 +111,8 @@
       items: items,
       itemsText: WORDS.items + ' ' + count,
       rows: rows,
+      voidText: voidRecord && voidRecord.type === 'void' && voidRecord.saleId === sale.id
+        ? WORDS.void + '  ' + dateText(voidRecord.date) + '  ' + timeText(voidRecord.at) : '',
       thanks: top.thanks
     };
   }
@@ -137,6 +142,7 @@
       (r.shopPhone ? '<div class="rc-phone">' + esc(r.shopPhone) + '</div>' : '') +
       '<div class="rc-pair"><span>' + esc(r.title) + '</span><span>' + esc(r.numberText) + '</span></div>' +
       '<div class="rc-when">' + esc(r.when) + '</div>' +
+      (r.voidText ? '<div class="rc-void">' + esc(r.voidText) + '</div>' : '') +
       '<div class="rc-rule"></div>';
 
     r.items.forEach(function (it) {

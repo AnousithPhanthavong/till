@@ -7,10 +7,13 @@
    Step 7b: totals for each month, and for the last 12 months.
    Step 7c: items sold with no stock on record, and stock removals.
 
-   Only records marked as sales are counted. When voids and refunds are
-   added later they will be their own kind of record, so they can never be
-   counted as money in by mistake. A sale that does not look right is left
-   out and counted in `skipped`, so the screen can say so. */
+   Only records marked as sales are counted. A sale that does not look
+   right is left out and counted in `skipped`, so the screen can say so.
+
+   Step 12: a void is its own record (type 'void', pointing at a sale by
+   saleId). A voided sale is left out of the money and counted instead in
+   voidCount / voidKip, on the day of the sale itself (not the day it was
+   voided). The voided sale still appears in the list for its day. */
 
 (function (global) {
   'use strict';
@@ -39,15 +42,29 @@
   }
 
   function emptyDay(date) {
-    return { date: date, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, itemCount: 0 };
+    return { date: date, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, itemCount: 0, voidCount: 0, voidKip: 0 };
+  }
+
+  /* Every void, by the id of the sale it voids: { saleId: voidRecord }. */
+  function voidsBySale(sales) {
+    var map = {};
+    (sales || []).forEach(function (s) {
+      if (s && s.type === 'void' && typeof s.saleId === 'string' && s.saleId && !map[s.saleId]) {
+        map[s.saleId] = s;
+      }
+    });
+    return map;
   }
 
   /* One entry per day that had sales, newest day first:
-     { date, count, totalKip, cashKip, qrKip, itemCount }
+     { date, count, totalKip, cashKip, qrKip, itemCount, voidCount, voidKip }
+     count and the money leave voided sales out. A day whose only sales were
+     voided still appears, with zero money.
      Returns { days, skipped }. */
   function dailyTotals(sales) {
     var byDate = {};
     var skipped = 0;
+    var voids = voidsBySale(sales);
     (sales || []).forEach(function (s) {
       if (!isCountable(s)) {
         /* Anything that is not a sale at all (a future void) is not "skipped". */
@@ -55,6 +72,11 @@
         return;
       }
       var d = byDate[s.date] || (byDate[s.date] = emptyDay(s.date));
+      if (voids[s.id]) {
+        d.voidCount += 1;
+        d.voidKip = add(d.voidKip, s.totalKip);
+        return;
+      }
       d.count += 1;
       d.totalKip = add(d.totalKip, s.totalKip);
       d.itemCount = add(d.itemCount, s.itemCount);
@@ -119,13 +141,15 @@
      was wrong at some point. They are not in the total. */
   function lastTwelveMonths(sales, todayYmd) {
     var from = yearStart(todayYmd);
-    var r = { from: from, to: todayYmd, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, later: 0, skipped: 0 };
+    var r = { from: from, to: todayYmd, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, later: 0, skipped: 0, voidCount: 0, voidKip: 0 };
     var days = dailyTotals(sales);
     r.skipped = days.skipped;
     days.days.forEach(function (d) {
       if (d.date > todayYmd) { r.later += d.count; return; }
       if (d.date < from) { return; }
       r.count += d.count;
+      r.voidCount += d.voidCount;
+      r.voidKip = add(r.voidKip, d.voidKip);
       r.totalKip = add(r.totalKip, d.totalKip);
       r.cashKip = add(r.cashKip, d.cashKip);
       r.qrKip = add(r.qrKip, d.qrKip);
@@ -144,7 +168,7 @@
 
   /* The 12 calendar months up to and including this one, newest first.
      Months with no sales are included, with zeros.
-     Each: { month: 'YYYY-MM', count, totalKip, cashKip, qrKip, soFar } */
+     Each: { month: 'YYYY-MM', count, totalKip, cashKip, qrKip, voidCount, soFar } */
   function monthTotals(sales, todayYmd) {
     var t = parseYmd(todayYmd);
     var list = [];
@@ -154,7 +178,7 @@
       var m = t.m - i;
       while (m < 1) { m += 12; y -= 1; }
       var key = y + '-' + two(m);
-      var row = { month: key, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, soFar: i === 0 };
+      var row = { month: key, count: 0, totalKip: 0, cashKip: 0, qrKip: 0, voidCount: 0, soFar: i === 0 };
       byMonth[key] = row;
       list.push(row);
     }
@@ -163,6 +187,7 @@
       var row = byMonth[d.date.slice(0, 7)];
       if (!row) { return; }
       row.count += d.count;
+      row.voidCount += d.voidCount;
       row.totalKip = add(row.totalKip, d.totalKip);
       row.cashKip = add(row.cashKip, d.cashKip);
       row.qrKip = add(row.qrKip, d.qrKip);
@@ -240,6 +265,7 @@
   }
 
   global.Report = {
+    voidsBySale: voidsBySale,
     stockGaps: stockGaps,
     removalSummary: removalSummary,
     yearStart: yearStart,
