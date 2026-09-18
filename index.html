@@ -1358,6 +1358,18 @@
 
   #bk-load { margin-bottom: 22px; }
 
+  /* Import products (13a) */
+  main > #screen-import { max-width: 72rem; }
+  .headbtns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  button.addbtn.soft { background: var(--card); color: var(--brand-dark); border: 2px solid var(--pink-soft); box-shadow: none; }
+  #screen-import .panel .tipcard { margin: 14px 18px 18px; }
+  #screen-import .panel .btnpad { padding-bottom: 4px; }
+  #screen-import .panel .btnpad button { margin: 0; }
+  .imstats .stat.add .v { color: var(--mint-dark); }
+  .imstats .stat.skip .v { color: var(--warn); }
+  .imstats .stat.bad .v { color: var(--bad); }
+  #im-add-list .item .sub .chip { margin-left: 6px; }
+
   .dangerzone { border: 2px solid #EFC2BC; background: #FFF7F6; }
   .dzhead { display: flex; align-items: center; gap: 12px; padding: 16px 18px 4px; }
   .dzhead .ico { width: 40px; height: 40px; padding: 8px; border-radius: 12px; background: #FDECEC; color: var(--bad); flex: none; }
@@ -1893,7 +1905,10 @@
 
     <div class="pagehead">
       <h1>Products</h1>
+      <div class="headbtns">
+      <button type="button" id="go-import" class="addbtn soft"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM4 10h16M10 4v16"/></svg>Import</button>
       <button type="button" id="go-add" class="addbtn"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add product</button>
+      </div>
     </div>
     <p class="msg" id="p-msg" hidden></p>
 
@@ -1908,6 +1923,79 @@
     </div>
 
     <button id="back-home" class="secondary" hidden>Back to menu</button>
+
+  </section>
+
+  <!-- ================ IMPORT PRODUCTS (13) ================= -->
+  <section id="screen-import" class="owner-screen" hidden>
+
+    <div class="pagehead">
+      <h1>Import products</h1>
+      <button type="button" id="im-back" class="backpill chevback">Products</button>
+    </div>
+    <p class="lede">Add many products at once from a spreadsheet. Checking a file never changes anything.</p>
+
+    <div class="stockgrid">
+      <div>
+        <section class="panel">
+          <h2>1. Get the template</h2>
+          <p class="dztext">A spreadsheet with the four headings the till reads. One product per row.</p>
+          <div class="btnpad">
+            <button id="im-template" class="secondary"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Save the template</button>
+          </div>
+          <div class="tipcard">
+            <p><b>Name</b> as it should show on the till and receipt.</p>
+            <p><b>Price</b> in kip, for example 185000. Rounded to the nearest 500.</p>
+            <p><b>Barcode</b> can be left empty. Set this column to <b>Text</b> before typing, or long barcodes turn into 8.85E+12.</p>
+            <p><b>Expiry</b> write <b>yes</b> for formula, food and anything with a date. Leave it empty for the rest.</p>
+            <p>Stock is not imported. It goes in later as deliveries.</p>
+          </div>
+        </section>
+      </div>
+
+      <div>
+        <section class="panel">
+          <h2>2. Check your file</h2>
+          <p class="dztext">Save the spreadsheet as CSV first. <b>Excel:</b> File → Save As → "CSV UTF-8". <b>Google Sheets:</b> File → Download → CSV.</p>
+          <input id="im-file" type="file" accept=".csv,text/csv,text/comma-separated-values,text/plain" hidden>
+          <div class="btnpad">
+            <button id="im-pick" class="bigsave"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>Choose a CSV file</button>
+          </div>
+          <p class="dztext" id="im-template-msg" hidden></p>
+        </section>
+      </div>
+    </div>
+
+    <p class="msg banner" id="im-msg" hidden></p>
+
+    <section class="panel" id="im-summary" hidden>
+      <h2 id="im-name">In this file</h2>
+      <div class="stats inpanel imstats">
+        <div class="stat add"><span class="lbl">Can be added</span><span class="v" id="im-n-add">–</span></div>
+        <div class="stat skip"><span class="lbl">Already in the till</span><span class="v" id="im-n-skip">–</span></div>
+        <div class="stat bad"><span class="lbl">Need fixing</span><span class="v" id="im-n-bad">–</span></div>
+      </div>
+    </section>
+
+    <section class="panel alert findings bad" id="im-bad-panel" hidden>
+      <h2>Fix these in the spreadsheet</h2>
+      <div id="im-bad"></div>
+    </section>
+
+    <section class="panel alert soon-only findings" id="im-notes-panel" hidden>
+      <h2>Worth knowing (not a problem)</h2>
+      <div id="im-notes"></div>
+    </section>
+
+    <section class="panel" id="im-add-panel" hidden>
+      <h2 id="im-add-title">Can be added</h2>
+      <div id="im-add-list"></div>
+    </section>
+
+    <section class="panel alert soon-only findings" id="im-skip-panel" hidden>
+      <h2>Left out: already in the till (not changed)</h2>
+      <div id="im-skip"></div>
+    </section>
 
   </section>
 
@@ -2346,6 +2434,7 @@
 <script src="./receipt.js"></script>
 <script src="./report.js"></script>
 <script src="./backup.js"></script>
+<script src="./importer.js"></script>
 <script>
   var $ = function (id) { return document.getElementById(id); };
 
@@ -2381,13 +2470,16 @@
   function backupIsCurrent() {
     return typeof Backup !== 'undefined' && typeof Backup.afterFresh === 'function';
   }
+  function importIsCurrent() {
+    return typeof ProductImport !== 'undefined' && typeof ProductImport.check === 'function';
+  }
   function allCurrent() {
     return dbIsCurrent() && cartIsCurrent() && receiptIsCurrent() && reportIsCurrent() &&
-      backupIsCurrent();
+      backupIsCurrent() && importIsCurrent();
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Void build 12b';
+  var BUILD = 'Import build 13a';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2415,6 +2507,7 @@
     $('screen-shop').hidden = (which !== 'shop');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
+    $('screen-import').hidden = (which !== 'import');
     $('screen-stock').hidden = (which !== 'stock');
     $('screen-remove').hidden = (which !== 'remove');
     $('screen-history').hidden = (which !== 'history');
@@ -3495,6 +3588,137 @@
       event.preventDefault();
       event.target.blur();
     }
+  });
+
+  /* ---------- import products (13a: template and check) ---------- */
+
+  function resetImport() {
+    say('im-msg', '', '');
+    ['im-summary', 'im-bad-panel', 'im-notes-panel', 'im-add-panel', 'im-skip-panel', 'im-template-msg']
+      .forEach(function (id) { $(id).hidden = true; });
+    ['im-bad', 'im-notes', 'im-add-list', 'im-skip'].forEach(function (id) { $(id).innerHTML = ''; });
+  }
+
+  $('go-import').addEventListener('click', function () {
+    resetImport();
+    show('import');
+  });
+
+  $('im-back').addEventListener('click', function () {
+    resetImport();
+    show('products');
+    loadProducts();
+  });
+
+  /* The blank template. iPad: share sheet (must run straight from the
+     tap). Windows: a download. */
+  $('im-template').addEventListener('click', function () {
+    var text = ProductImport.templateText();
+    var name = ProductImport.TEMPLATE_NAME;
+    var file = new File([text], name, { type: 'text/csv' });
+    function told(t) { $('im-template-msg').hidden = false; $('im-template-msg').textContent = t; }
+    if (canShareFile(file)) {
+      navigator.share({ files: [file], title: name }).then(function () {
+        told('Template handed over. Open it in Excel or Google Sheets.');
+      }).catch(function (err) {
+        if (!(err && err.name === 'AbortError')) { told('The share sheet did not work (' + errText(err) + ').'); }
+      });
+      return;
+    }
+    var url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    told('Downloaded: ' + name + '. Check your Downloads folder.');
+  });
+
+  $('im-pick').addEventListener('click', function () {
+    $('im-file').value = '';   /* so the same file can be picked twice */
+    $('im-file').click();
+  });
+
+  var IMPORT_SHOW_MAX = 200;
+
+  function importRowsHtml(rows, withWhy) {
+    var html = rows.slice(0, IMPORT_SHOW_MAX).map(function (r) {
+      return '<div class="row"><span>Row ' + r.rowNo + (r.name ? ' · ' + esc(r.name) : '') +
+        (withWhy ? ': ' + esc(r.why.join(' ')) : '') + '</span></div>';
+    }).join('');
+    if (rows.length > IMPORT_SHOW_MAX) {
+      html += '<div class="row"><span>and ' + (rows.length - IMPORT_SHOW_MAX) + ' more</span></div>';
+    }
+    return html;
+  }
+
+  $('im-file').addEventListener('change', function () {
+    var file = $('im-file').files && $('im-file').files[0];
+    if (!file) { return; }
+    resetImport();
+    if (file.size > ProductImport.MAX_FILE_BYTES) {
+      say('im-msg', 'bad', 'This file is far too large to be a product list.');
+      return;
+    }
+    $('im-pick').disabled = true;
+    say('im-msg', 'good', 'Checking ' + file.name + '…');
+    Promise.all([readFileText(file), Till.listProducts()]).then(function (got) {
+      var r = ProductImport.check(got[0], got[1]);
+
+      if (r.problems.length) {
+        $('im-bad').innerHTML = listHtml(r.problems);
+        $('im-bad-panel').hidden = false;
+        say('im-msg', 'bad', 'This file cannot be read. Nothing was changed.');
+        return;
+      }
+
+      $('im-name').textContent = file.name;
+      $('im-n-add').textContent = String(r.add);
+      $('im-n-skip').textContent = String(r.skip);
+      $('im-n-bad').textContent = String(r.bad);
+      $('im-summary').hidden = false;
+
+      var bad = r.rows.filter(function (x) { return x.state === 'bad'; });
+      var skip = r.rows.filter(function (x) { return x.state === 'skip'; });
+      var add = r.rows.filter(function (x) { return x.state === 'add'; });
+
+      if (bad.length) { $('im-bad').innerHTML = importRowsHtml(bad, true); $('im-bad-panel').hidden = false; }
+      if (r.notes.length) { $('im-notes').innerHTML = listHtml(r.notes); $('im-notes-panel').hidden = false; }
+      if (skip.length) { $('im-skip').innerHTML = importRowsHtml(skip, false); $('im-skip-panel').hidden = false; }
+
+      if (add.length) {
+        $('im-add-title').textContent = plural(add.length, 'product can be added', 'products can be added');
+        var html = add.slice(0, IMPORT_SHOW_MAX).map(function (x) {
+          var sub = 'Row ' + x.rowNo + ' · ' + (x.barcode ? esc(x.barcode) : 'No barcode');
+          if (x.tracksExpiry) { sub += '<span class="chip plain">Expiry dates</span>'; }
+          if (x.typedKip !== x.priceKip) {
+            sub += '<span class="chip warn">was ' + Till.formatKip(x.typedKip) + '</span>';
+          }
+          return '<div class="item"><span class="who"><span class="nm">' + esc(x.name) + '</span>' +
+            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="price">' + Till.formatKip(x.priceKip) + '</span></div>';
+        }).join('');
+        if (add.length > IMPORT_SHOW_MAX) {
+          html += '<div class="empty">and ' + (add.length - IMPORT_SHOW_MAX) + ' more</div>';
+        }
+        $('im-add-list').innerHTML = html;
+        $('im-add-panel').hidden = false;
+      }
+
+      say('im-msg', add.length ? (bad.length ? 'warn' : 'good') : 'bad',
+        (add.length
+          ? plural(add.length, 'product is', 'products are') + ' ready to add' +
+            (bad.length ? '; ' + plural(bad.length, 'row needs', 'rows need') + ' fixing first or will be left out' : '') + '.'
+          : 'Nothing in this file can be added.') +
+        ' Nothing has been saved (importing comes in the next step).');
+    }).catch(function (err) {
+      say('im-msg', 'bad', errText(err));
+    }).then(function () {
+      $('im-pick').disabled = false;
+    });
   });
 
   /* ---------- the home screen ---------- */
@@ -5697,7 +5921,7 @@
   } else {
     $('lock').hidden = true;
     var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' :
-      (!receiptIsCurrent() ? 'receipt.js' : (!reportIsCurrent() ? 'report.js' : 'backup.js')));
+      (!receiptIsCurrent() ? 'receipt.js' : (!reportIsCurrent() ? 'report.js' : (!backupIsCurrent() ? 'backup.js' : 'importer.js'))));
     $('verdict').setAttribute('data-state', 'bad');
     $('verdict').textContent = 'The app is only half updated';
     $('lede').textContent = 'This device is missing the current ' + stale + '. With the internet on, close the app completely and open it again. If it still says this, ' + stale + ' did not upload.';

@@ -1,7 +1,7 @@
 /* Keeps a copy of the till on the iPad so it opens with no internet.
    Change CACHE when you send a new version of the files. */
 
-var CACHE = 'till-48';
+var CACHE = 'till-49';
 
 var NAV_WAIT_MS = 4000;
 
@@ -31,6 +31,7 @@ var FILES = [
   './receipt.js',
   './report.js',
   './backup.js',
+  './importer.js',
   './manifest.webmanifest',
   './icon-180.png',
   './icon-512.png'
