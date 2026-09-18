@@ -1,7 +1,7 @@
 /* Keeps a copy of the till on the iPad so it opens with no internet.
    Change CACHE when you send a new version of the files. */
 
-var CACHE = 'till-41';
+var CACHE = 'till-42';
 
 var NAV_WAIT_MS = 4000;
 

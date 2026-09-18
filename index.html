@@ -1294,6 +1294,73 @@
   .hbar .ht { height: 12px; border-radius: 999px; background: var(--bg); overflow: hidden; }
   .hbar .ht span { display: block; height: 100%; border-radius: 999px; background: #E07B3F; }
   .hbar .hn { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ---------- backup, check, shop details (10a-6) ---------- */
+  /* Owner-only screens carry class owner-screen, so 10b can hide them together. */
+  .owner-screen [hidden] { display: none !important; }
+  main > #screen-backup { max-width: 72rem; }
+  main > #screen-load { max-width: 46rem; }
+  main > #screen-shop { max-width: 60rem; }
+
+  .msg.banner { border-radius: 14px; padding: 12px 16px; background: var(--card); border: 1px solid var(--line); }
+  .msg.banner[data-state="good"] { background: var(--mint-soft); border-color: transparent; }
+  .msg.banner[data-state="bad"] { background: #FDECEC; border-color: transparent; }
+  .msg.banner[data-state="warn"] { background: #FFF3DA; border-color: transparent; }
+  .panel .btnpad .msg.banner { margin-bottom: 12px; }
+
+  .bkhero { background: var(--mint-soft); }
+  .bkhero[data-state="due"] { background: #FFF3DA; }
+  .bkhero[data-state="plain"] { background: var(--peach-soft); }
+  .bkhero .big { font-size: 36px; }
+  .bkhero[data-state="due"] .big { color: var(--warn); }
+  .bkhero .sub { display: block; margin-top: 4px; font-size: 15px; color: var(--muted); }
+
+  .stats.inpanel { padding: 4px 14px 14px; margin-top: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 480px) { .stats.inpanel { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stats.inpanel .stat { background: var(--bg); }
+  .stats.inpanel .stat.keep { background: var(--mint-soft); }
+  .row .v.filev { font-size: 14px; overflow-wrap: anywhere; }
+
+  #screen-backup button.bigsave, #screen-backup button.secondary,
+  #screen-load button.bigsave { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  #screen-backup button:not(.shortcut) .ico, #screen-load button .ico { width: 24px; height: 24px; }
+  #bk-download.secondary { min-height: 56px; border-radius: 16px; background: var(--card); border: 2px solid var(--line); }
+  button.moneybtn.bigsave { box-shadow: 0 4px 12px rgba(47, 166, 122, 0.25); }
+
+  .tipcard { background: var(--peach-soft); border-radius: 18px; padding: 4px 18px; margin: 10px 0 14px; font-size: 15px; }
+  .tipcard p { margin: 12px 0; }
+
+  #bk-load { margin-bottom: 22px; }
+
+  .dangerzone { border: 2px solid #EFC2BC; background: #FFF7F6; }
+  .dzhead { display: flex; align-items: center; gap: 12px; padding: 16px 18px 4px; }
+  .dzhead .ico { width: 40px; height: 40px; padding: 8px; border-radius: 12px; background: #FDECEC; color: var(--bad); flex: none; }
+  .dzhead .nm { display: block; font-size: 18px; font-weight: 700; color: var(--bad); }
+  .dzhead .sub { display: block; font-size: 14px; color: var(--muted); }
+  .dztext { margin: 8px 18px 4px; font-size: 15px; }
+  .dangerzone .stats.inpanel .stat { background: #fff; }
+  .dangerzone .field { border-top: 0; }
+  .dangerzone .field input { border-color: #EFC2BC; }
+  .dangerzone .btnpad { padding-bottom: 6px; }
+  .dangerzone[data-state="done"] { border-color: var(--line); background: var(--card); }
+  .dangerzone[data-state="done"] .dzhead .ico { background: var(--mint-soft); color: var(--mint-dark); }
+  .dangerzone[data-state="done"] .dzhead .nm { color: var(--ink); }
+
+  .panel.findings { border-width: 0; }
+  .findings.bad { background: #FFF7F6; box-shadow: inset 4px 0 0 var(--bad); }
+  .findings.soon-only { background: #FFFBF1; box-shadow: inset 4px 0 0 #E0B04A; }
+  .findings .row { border-top-color: rgba(0,0,0,0.05); font-size: 15px; }
+  .findings.bad .row span::before { content: '\2716\FE0E  '; color: var(--bad); }
+  .findings.soon-only .row span::before { content: '\2022  '; color: var(--warn); font-weight: 700; }
+  .restorecard .btnpad { padding-bottom: 6px; }
+
+  .shopgrid { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 24px; align-items: start; }
+  @media (max-width: 899px) { .shopgrid { grid-template-columns: 1fr; } }
+  .shoppreview { position: sticky; top: calc(env(safe-area-inset-top) + 84px); }
+  .shoppreview .colhead { margin-top: 0; }
+  .minirc { margin: 0 0 14px; border: 0; border-radius: 6px; box-shadow: 0 6px 20px rgba(120, 60, 80, 0.12); }
+  .minirc .rc-phone:empty { display: none; }
+  .pv-gap { text-align: center; color: #999; letter-spacing: 4px; padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -1843,134 +1910,177 @@
   </section>
 
   <!-- ======================= BACKUP ======================== -->
-  <section id="screen-backup" hidden>
+  <section id="screen-backup" class="owner-screen" hidden>
 
-    <h1>Backup</h1>
-    <p class="lede">A backup is one file holding everything on this device: products, deliveries, sales, removals and shop details. If this device is lost or the app is deleted, the backup is the only copy.</p>
-    <p class="msg" id="bk-msg" hidden></p>
+    <div class="pagehead">
+      <h1>Backup</h1>
+      <button type="button" id="bk-back" class="backpill chevback">Menu</button>
+    </div>
+    <p class="lede">One file with everything on this device. If the device is lost or the app is deleted, the backup is the only copy.</p>
+    <p class="msg banner" id="bk-msg" hidden></p>
 
-    <section class="panel">
-      <h2 id="bk-heading">What goes in</h2>
-      <div class="row"><span>Products</span><span class="v" id="bk-products">–</span></div>
-      <div class="row"><span>Deliveries</span><span class="v" id="bk-batches">–</span></div>
-      <div class="row"><span>Sales</span><span class="v" id="bk-sales">–</span></div>
-      <div class="row"><span>Sale lines</span><span class="v" id="bk-saleLines">–</span></div>
-      <div class="row"><span>Removals</span><span class="v" id="bk-removals">–</span></div>
-      <div class="row"><span>Shop details</span><span class="v" id="bk-settings">–</span></div>
-      <div class="row"><span>All sales added up</span><span class="v" id="bk-kip">–</span></div>
-      <div class="row"><span>File</span><span class="v" id="bk-file">–</span></div>
-    </section>
+    <div class="stockgrid">
+      <div>
+        <div class="herocard bkhero" id="bk-status">
+          <span class="lbl">Last backup</span>
+          <span class="big" id="bk-last">Reading…</span>
+          <span class="sub" id="bk-last-sub"></span>
+        </div>
 
-    <button id="bk-make">Make a backup</button>
-    <button id="bk-share" hidden>Save the file</button>
-    <button id="bk-download" class="secondary" hidden>Download the file</button>
+        <section class="panel">
+          <h2 id="bk-heading">What goes in</h2>
+          <div class="stats inpanel">
+            <div class="stat"><span class="lbl">Products</span><span class="v" id="bk-products">–</span></div>
+            <div class="stat"><span class="lbl">Deliveries</span><span class="v" id="bk-batches">–</span></div>
+            <div class="stat"><span class="lbl">Sales</span><span class="v" id="bk-sales">–</span></div>
+            <div class="stat"><span class="lbl">Sale lines</span><span class="v" id="bk-saleLines">–</span></div>
+            <div class="stat"><span class="lbl">Removals</span><span class="v" id="bk-removals">–</span></div>
+            <div class="stat"><span class="lbl">Shop details</span><span class="v" id="bk-settings">–</span></div>
+          </div>
+          <div class="row"><span>All sales added up</span><span class="v" id="bk-kip">–</span></div>
+          <div class="row"><span>File</span><span class="v filev" id="bk-file">–</span></div>
+        </section>
 
-    <p class="note">On the iPad, Save the file opens the share sheet: choose <b>Save to Files</b> (iCloud Drive is best), or send it to yourself on LINE or email. On the Windows computer the file goes to Downloads; copy it to a USB stick or Google Drive. The file holds all your sales, so keep it private.</p>
-    <p class="note" id="bk-keep"></p>
+        <button id="bk-make" class="bigsave"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13l2 2 4-4"/></svg>Make a backup</button>
+        <button id="bk-share" class="bigsave moneybtn" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg>Save the file</button>
+        <button id="bk-download" class="secondary" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Download the file</button>
 
-    <button id="bk-load" class="secondary">Check or load a backup file</button>
-
-    <section class="panel" id="fr-panel" hidden>
-      <h2>Start fresh before opening</h2>
-      <div class="row"><span id="fr-text"></span></div>
-      <div id="fr-rows">
-        <div class="row"><span>Sales to remove</span><span class="v" id="fr-sales">–</span></div>
-        <div class="row"><span>Sale lines to remove</span><span class="v" id="fr-saleLines">–</span></div>
-        <div class="row"><span>Deliveries to remove</span><span class="v" id="fr-batches">–</span></div>
-        <div class="row"><span>Removals to remove</span><span class="v" id="fr-removals">–</span></div>
-        <div class="row"><span>Products kept</span><span class="v" id="fr-products">–</span></div>
-        <div class="row"><span>Shop details</span><span class="v">Kept</span></div>
+        <div class="tipcard">
+          <p><b>iPad:</b> Save the file opens the share sheet. Choose <b>Save to Files</b> (iCloud Drive is best), or send it to yourself on LINE or email.</p>
+          <p><b>Windows:</b> the file goes to Downloads. Copy it to a USB stick or Google Drive.</p>
+          <p>The file holds all your sales, so keep it private.</p>
+        </div>
+        <p class="note" id="bk-keep"></p>
       </div>
-      <div class="field" id="fr-typebox">
-        <label for="fr-words">Type START FRESH to go ahead</label>
-        <input id="fr-words" type="text" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-        <p class="hint">This cannot be undone. Receipt numbers start again at 1.</p>
-      </div>
-      <div class="btnpad">
-        <p class="msg" id="fr-msg" hidden></p>
-        <button id="fr-go" class="quiet" disabled>Start fresh</button>
-      </div>
-    </section>
 
-    <button id="bk-back" class="secondary">Back to menu</button>
+      <div>
+        <button type="button" id="bk-load" class="shortcut peach"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="who"><span class="nm">Check or load a backup file</span><span class="sub">See what is inside. Checking changes nothing.</span></span></button>
+
+        <section class="panel dangerzone" id="fr-panel" hidden>
+          <div class="dzhead"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></svg><span><span class="nm">Start fresh before opening</span><span class="sub">Removes test data. Once only.</span></span></div>
+          <p class="dztext" id="fr-text"></p>
+          <div id="fr-rows" class="stats inpanel">
+            <div class="stat"><span class="lbl">Sales to remove</span><span class="v" id="fr-sales">–</span></div>
+            <div class="stat"><span class="lbl">Sale lines to remove</span><span class="v" id="fr-saleLines">–</span></div>
+            <div class="stat"><span class="lbl">Deliveries to remove</span><span class="v" id="fr-batches">–</span></div>
+            <div class="stat"><span class="lbl">Removals to remove</span><span class="v" id="fr-removals">–</span></div>
+            <div class="stat keep"><span class="lbl">Products kept</span><span class="v" id="fr-products">–</span></div>
+            <div class="stat keep"><span class="lbl">Shop details</span><span class="v">Kept</span></div>
+          </div>
+          <div class="field" id="fr-typebox">
+            <label for="fr-words">Type START FRESH to go ahead</label>
+            <input id="fr-words" type="text" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+            <p class="hint">This cannot be undone. Receipt numbers start again at 1.</p>
+          </div>
+          <div class="btnpad">
+            <p class="msg banner" id="fr-msg" hidden></p>
+            <button id="fr-go" class="danger" disabled>Start fresh</button>
+          </div>
+        </section>
+      </div>
+    </div>
 
   </section>
 
   <!-- ================== CHECK / LOAD A BACKUP =============== -->
-  <section id="screen-load" hidden>
+  <section id="screen-load" class="owner-screen" hidden>
 
-    <h1 id="ld-title">Check or load a backup</h1>
-    <p class="lede">Pick a backup file to see what is inside and whether it is complete. Checking never changes anything. Loading is only offered on an empty till, so nothing can be overwritten.</p>
+    <div class="pagehead">
+      <h1 id="ld-title">Check or load a backup</h1>
+      <button type="button" id="ld-back" class="backpill chevback">Backup</button>
+    </div>
+    <p class="lede">See what is inside a backup file and whether it is complete. Checking never changes anything. Loading is only offered on an empty till.</p>
 
     <input id="ld-file" type="file" accept=".json,application/json" hidden>
-    <button id="ld-pick">Choose a backup file</button>
+    <button id="ld-pick" class="bigsave"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h6l2 2h10v10H3z"/></svg>Choose a backup file</button>
 
-    <p class="msg" id="ld-msg" hidden></p>
+    <p class="msg banner" id="ld-msg" hidden></p>
 
     <section class="panel" id="ld-panel" hidden>
       <h2 id="ld-name">In this file</h2>
       <div class="row"><span>Made</span><span class="v" id="ld-made">–</span></div>
       <div class="row"><span>Shop name</span><span class="v" id="ld-shop">–</span></div>
-      <div class="row"><span>Products</span><span class="v" id="ld-products">–</span></div>
-      <div class="row"><span>Deliveries</span><span class="v" id="ld-batches">–</span></div>
-      <div class="row"><span>Sales</span><span class="v" id="ld-sales">–</span></div>
-      <div class="row"><span>Sale lines</span><span class="v" id="ld-saleLines">–</span></div>
-      <div class="row"><span>Removals</span><span class="v" id="ld-removals">–</span></div>
+      <div class="stats inpanel">
+        <div class="stat"><span class="lbl">Products</span><span class="v" id="ld-products">–</span></div>
+        <div class="stat"><span class="lbl">Deliveries</span><span class="v" id="ld-batches">–</span></div>
+        <div class="stat"><span class="lbl">Sales</span><span class="v" id="ld-sales">–</span></div>
+        <div class="stat"><span class="lbl">Sale lines</span><span class="v" id="ld-saleLines">–</span></div>
+        <div class="stat"><span class="lbl">Removals</span><span class="v" id="ld-removals">–</span></div>
+      </div>
       <div class="row"><span>All sales added up</span><span class="v" id="ld-kip">–</span></div>
     </section>
 
-    <section class="panel alert" id="ld-problems-panel" hidden>
+    <section class="panel alert findings bad" id="ld-problems-panel" hidden>
       <h2>Why it cannot be used</h2>
       <div id="ld-problems"></div>
     </section>
 
-    <section class="panel alert soon-only" id="ld-notes-panel" hidden>
-      <h2 style="color: var(--warn)">Worth knowing (not a problem)</h2>
+    <section class="panel alert soon-only findings" id="ld-notes-panel" hidden>
+      <h2>Worth knowing (not a problem)</h2>
       <div id="ld-notes"></div>
     </section>
 
-    <section class="panel" id="ld-restore-panel" hidden>
+    <section class="panel restorecard" id="ld-restore-panel" hidden>
       <h2>Load into this device</h2>
-      <div class="row"><span id="ld-restore-text"></span></div>
+      <p class="dztext" id="ld-restore-text"></p>
+      <div class="btnpad">
+        <button id="ld-restore" class="bigsave" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Restore this backup</button>
+      </div>
     </section>
-    <button id="ld-restore" hidden>Restore this backup</button>
-    <button id="ld-home" hidden>Go to menu</button>
-
-    <button id="ld-back" class="secondary">Back to backup</button>
+    <button id="ld-home" class="bigsave" hidden>Go to menu</button>
 
   </section>
 
   <!-- ===================== SHOP DETAILS ===================== -->
-  <section id="screen-shop" hidden>
+  <section id="screen-shop" class="owner-screen" hidden>
 
-    <h1>Shop details</h1>
+    <div class="pagehead">
+      <h1>Shop details</h1>
+      <button type="button" id="sh-cancel" class="backpill">&#8249; Cancel</button>
+    </div>
     <p class="lede">These print at the top and bottom of every receipt.</p>
-    <p class="msg" id="sh-msg" hidden></p>
+    <p class="msg banner" id="sh-msg" hidden></p>
 
-    <section class="panel">
-      <h2>On the receipt</h2>
+    <div class="shopgrid">
+      <div>
+        <section class="panel">
+          <h2>On the receipt</h2>
 
-      <div class="field">
-        <label for="sh-name">Shop name</label>
-        <input id="sh-name" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
-        <p class="hint">Printed large at the top. Lao or English.</p>
+          <div class="field">
+            <label for="sh-name">Shop name</label>
+            <input id="sh-name" type="text" maxlength="40" autocomplete="off" autocapitalize="words">
+            <p class="hint">Printed large at the top. Lao or English.</p>
+          </div>
+
+          <div class="field">
+            <label for="sh-phone">Phone (optional)</label>
+            <input id="sh-phone" type="text" maxlength="30" inputmode="tel" autocomplete="off">
+            <p class="hint">Printed under the shop name. Leave empty to leave it off.</p>
+          </div>
+
+          <div class="field">
+            <label for="sh-thanks">Bottom line (optional)</label>
+            <input id="sh-thanks" type="text" maxlength="60" autocomplete="off">
+            <p class="hint">Leave empty to print ຂອບໃຈ (thank you).</p>
+          </div>
+        </section>
+
+        <button id="sh-save" class="bigsave"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Save</button>
       </div>
 
-      <div class="field">
-        <label for="sh-phone">Phone (optional)</label>
-        <input id="sh-phone" type="text" maxlength="30" inputmode="tel" autocomplete="off">
-        <p class="hint">Printed under the shop name. Leave empty to leave it off.</p>
+      <div class="shoppreview">
+        <h2 class="colhead">How it will look</h2>
+        <div class="rc minirc" aria-hidden="true">
+          <div class="rc-shop" id="sh-pv-name"></div>
+          <div class="rc-phone" id="sh-pv-phone"></div>
+          <div class="rc-rule"></div>
+          <div class="pv-gap">· · ·</div>
+          <div class="rc-rule"></div>
+          <div class="rc-thanks" id="sh-pv-thanks"></div>
+        </div>
+        <p class="note">Only the top and bottom are shown here. Old receipts also show these new details.</p>
       </div>
-
-      <div class="field">
-        <label for="sh-thanks">Bottom line (optional)</label>
-        <input id="sh-thanks" type="text" maxlength="60" autocomplete="off">
-        <p class="hint">Leave empty to print ຂອບໃຈ (thank you).</p>
-      </div>
-    </section>
-
-    <button id="sh-save">Save</button>
-    <button id="sh-cancel" class="secondary">Cancel</button>
+    </div>
 
   </section>
 
@@ -2020,7 +2130,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Reports look build 10a-5';
+  var BUILD = 'Backup look build 10a-6';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -4030,14 +4140,25 @@
 
   /* ---------- shop details ---------- */
 
+  /* The small receipt beside the form, redrawn as you type. Saves nothing. */
+  function showShopPreview() {
+    var top = Receipt.shopLines({ name: $('sh-name').value, phone: $('sh-phone').value, thanks: $('sh-thanks').value });
+    $('sh-pv-name').textContent = top.name;
+    $('sh-pv-phone').textContent = top.phone;
+    $('sh-pv-thanks').textContent = top.thanks;
+  }
+
   $('go-shop').addEventListener('click', function () {
     say('sh-msg', '', '');
     $('sh-save').disabled = true;
+    ['sh-name', 'sh-phone', 'sh-thanks'].forEach(function (id) { $(id).value = ''; });
+    showShopPreview();
     show('shop');
     Till.getShop().then(function (shop) {
       $('sh-name').value = shop.name;
       $('sh-phone').value = shop.phone;
       $('sh-thanks').value = shop.thanks;
+      showShopPreview();
       $('sh-save').disabled = false;
     }).catch(function (err) {
       say('sh-msg', 'bad', 'Could not read the shop details: ' +
@@ -4073,6 +4194,7 @@
 
   /* Enter in a shop details box just closes the keyboard. */
   ['sh-name', 'sh-phone', 'sh-thanks'].forEach(function (id) {
+    $(id).addEventListener('input', showShopPreview);
     $(id).addEventListener('keydown', function (event) {
       if (event.key === 'Enter' || event.keyCode === 13) {
         event.preventDefault();
@@ -4095,7 +4217,7 @@
     if (!backupMeta) { return; }
     var meta = { fileName: backupFile ? backupFile.name : '', how: how,
       counts: backupMeta.counts, salesKip: backupMeta.salesKip };
-    Till.saveBackupNote(meta).then(showFresh).catch(function (err) {
+    Till.saveBackupNote(meta).then(function () { showBackupStatus(); return showFresh(); }).catch(function (err) {
       say('bk-msg', 'bad', 'The file was handed over, but the app could not remember the backup time: ' + errText(err));
     });
   }
@@ -4125,6 +4247,39 @@
     $('bk-download').hidden = true;
   }
 
+  /* The Last backup card at the top of the Backup screen. Reads only. */
+  function showBackupStatus() {
+    var box = $('bk-status');
+    return Promise.all([Till.readAll(), Till.getBackupNote()]).then(function (got) {
+      var note = got[1];
+      var r = Backup.reminder(got[0], note, Till.localDate(new Date()));
+      var big, sub, state;
+      if (r.state === 'fresh') {
+        big = 'None since start fresh'; state = 'due';
+        sub = 'Make a new backup now. Older files still hold the test sales.';
+      } else if (r.state === 'empty') {
+        big = 'Nothing to back up yet'; state = 'plain'; sub = '';
+      } else if (r.state === 'never') {
+        big = 'Never'; state = 'due';
+        sub = 'If this device is lost, everything on it is gone.';
+      } else {
+        var ago = Backup.agoText(r.days);
+        big = ago.charAt(0).toUpperCase() + ago.slice(1);
+        state = r.state === 'due' ? 'due' : 'ok';
+        sub = (note && note.date ? Receipt.dateText(note.date) + ' \u00B7 ' : '') +
+          (r.changes ? plural(r.changes, 'change', 'changes') + ' since' : 'Nothing changed since') +
+          (r.state === 'due' ? ' \u00B7 time for a new one' : '');
+      }
+      $('bk-last').textContent = big;
+      $('bk-last-sub').textContent = sub;
+      box.setAttribute('data-state', state);
+    }).catch(function () {
+      $('bk-last').textContent = 'Could not be read';
+      $('bk-last-sub').textContent = '';
+      box.setAttribute('data-state', 'due');
+    });
+  }
+
   function showBackupCounts(c, kip, fileText) {
     ['products', 'batches', 'sales', 'saleLines', 'removals'].forEach(function (t) {
       $('bk-' + t).textContent = c ? String(c[t]) : '–';
@@ -4144,6 +4299,7 @@
     $('fr-words').value = '';
     say('fr-msg', '', '');
     show('backup');
+    showBackupStatus();
     showFresh();
     Till.keepDataSafe().then(function (answer) {
       $('bk-keep').textContent = answer === 'yes'
@@ -4175,7 +4331,9 @@
       var share = canShareFile(backupFile);
       $('bk-share').hidden = !share;
       $('bk-download').hidden = false;
-      $('bk-download').className = share ? 'secondary' : '';
+      $('bk-download').classList.toggle('secondary', share);
+      $('bk-download').classList.toggle('bigsave', !share);
+      $('bk-download').classList.toggle('moneybtn', !share);
       say('bk-msg', 'good', 'Backup made and checked. Now ' +
         (share ? 'tap Save the file.' : 'tap Download the file.'));
     }).catch(function (err) {
@@ -4206,6 +4364,7 @@
     return Till.freshStatus().then(function (st) {
       $('fr-panel').hidden = false;
       var f = st.freshNote;
+      $('fr-panel').setAttribute('data-state', f ? 'done' : '');
       if (f) {
         var r = f.removed || {};
         $('fr-text').textContent = 'Done on ' + Receipt.dateText(f.date) + ': ' +
@@ -4257,6 +4416,7 @@
       $('bk-heading').textContent = 'What goes in';
       showBackupCounts(null);
       $('fr-words').value = '';
+      showBackupStatus();
       return showFresh().then(function () {
         say('fr-msg', 'good', 'Started fresh. ' +
           plural(result.removed.sales, 'sale', 'sales') + ' removed, ' +
