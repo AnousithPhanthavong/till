@@ -983,6 +983,158 @@
     color: var(--muted);
   }
   footer b { font-weight: 600; color: var(--ink); }
+
+  /* ---------- Products, product form, Stock, Remove items (10a-4) ---------- */
+  main > #screen-products { max-width: 72rem; }
+  main > #screen-form { max-width: 40rem; }
+  main > #screen-stock { max-width: 72rem; }
+  main > #screen-remove { max-width: 40rem; }
+  button.chevback::before { content: '\2039\00a0'; }
+
+  /* pink "+ Add" style button in a page heading */
+  button.addbtn {
+    display: flex; align-items: center; gap: 8px;
+    width: auto; min-height: 52px; margin: 0; padding: 10px 22px;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(217, 87, 127, 0.25);
+  }
+  button.addbtn .ico { width: 22px; height: 22px; }
+
+  /* search box with a magnifier inside */
+  .findbox { position: relative; margin-bottom: 8px; }
+  .findbox .ico { position: absolute; left: 16px; top: 16px; color: var(--muted); pointer-events: none; }
+  .findbox .search { margin: 0; padding-left: 52px; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06); }
+  .findbox .search::placeholder { color: var(--muted); }
+  #p-count { margin: 0 4px 14px; font-size: 15px; }
+
+  /* the product cards */
+  .plist { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .plist > .empty { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
+  .plist button.pcard {
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-top: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
+  }
+  .plist .pcard .who { flex: 1; }
+  .plist .pcard .nm { overflow-wrap: anywhere; }
+  .plist .pcard .price { align-self: flex-start; font-size: 18px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip {
+    display: inline-block;
+    font-size: 13px; font-weight: 600; line-height: 1.3;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--line);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .chip.ok { background: var(--mint-soft); color: var(--mint-dark); }
+  .chip.warn { background: #FFF3DA; color: var(--warn); }
+  .chip.bad { background: #FDECEC; color: var(--bad); }
+  .chip.plain { background: var(--peach-soft); color: #9A4A1C; }
+
+  /* form: selling and cost price side by side when there is room */
+  .fieldpair { display: grid; grid-template-columns: 1fr 1fr; }
+  .fieldpair .field + .field { border-left: 1px solid var(--line); }
+  .panel h2 + .fieldpair .field { border-top: 0; }
+  @media (max-width: 560px) {
+    .fieldpair { grid-template-columns: 1fr; }
+    .fieldpair .field + .field { border-left: 0; border-top: 1px solid var(--line); }
+  }
+  #screen-form .panel > .check:first-child { border-top: 0; }
+  #screen-form .check input { accent-color: var(--brand); }
+  button.bigsave {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 60px; font-size: 20px; border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(217, 87, 127, 0.22);
+  }
+  button.bigsave .ico { width: 24px; height: 24px; }
+  button.stockbtn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    min-height: 60px; border-radius: 16px;
+    background: var(--card); color: var(--mint-dark);
+    border: 2px solid var(--mint);
+  }
+  button.stockbtn:active { background: var(--mint-soft); }
+
+  /* Stock: product, big number, then two columns */
+  .stockhero {
+    display: flex; align-items: center; gap: 16px;
+    background: var(--mint-soft);
+    border-radius: 22px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+  }
+  .stockhero .initial { width: 56px; height: 56px; font-size: 26px; background: #fff; }
+  .stockhero .who { flex: 1; min-width: 0; }
+  .stockhero .nm { display: block; font-size: 22px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+  .stockhero .sub { display: block; color: var(--mint-dark); font-size: 15px; font-weight: 600; }
+  .stockhero .sum { font-size: 44px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--mint-dark); }
+  .stockgrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 899px) { .stockgrid { grid-template-columns: 1fr; } }
+  .stockgrid .panel { margin-bottom: 18px; }
+  #st-removed > .item:first-child { border-top: 0; }
+
+  /* one delivery */
+  #st-list { padding: 10px 12px 2px; }
+  #st-list > .empty { padding: 6px 6px 14px; }
+  .dcard {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .dcard[data-state="expired"] { border-color: #EFC2BC; background: #FFF7F6; }
+  .dcard[data-state="soon"] { border-color: #F1DDAE; background: #FFFBF1; }
+  .dcard .dtop { display: flex; justify-content: space-between; gap: 12px; }
+  .dcard .nm { display: block; font-weight: 700; }
+  .dcard .sub { display: block; font-size: 14px; color: var(--muted); }
+  .dcard .left { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dcard .dfoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+  .dcard .dfoot button {
+    width: auto; min-height: 44px; margin: 0 0 0 auto; padding: 8px 16px; font-size: 16px;
+    border-radius: 999px;
+  }
+  #screen-stock .tagline, #screen-remove .tagline {
+    display: inline-block; font-size: 13px; padding: 3px 10px; border-radius: 999px;
+  }
+  #screen-stock .tag-expired, #screen-remove .tag-expired { background: #FDECEC; }
+  #screen-stock .tag-soon, #screen-remove .tag-soon { background: #FFF3DA; }
+
+  /* Remove items */
+  .rm-product { color: var(--ink); font-size: 20px; font-weight: 700; margin: 0 4px 16px; }
+  .rm-batch .left { font-size: 22px; }
+  .rm-batch .right .tagline { margin-top: 4px; }
+  .reasons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px 4px; }
+  @media (max-width: 480px) { .reasons { grid-template-columns: 1fr; } }
+  .check.reason { position: relative; display: block; padding: 0; border: 0; }
+  .check.reason input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+  .check.reason label {
+    display: block; height: 100%;
+    padding: 12px 14px;
+    font-weight: 700;
+    background: var(--card);
+    border: 2px solid var(--line);
+    border-radius: 16px;
+    cursor: pointer;
+  }
+  .check.reason label .sub { font-weight: 400; margin-top: 2px; }
+  .check.reason input:checked + label { border-color: var(--brand); background: var(--pink-soft); }
+  .check.reason input:checked + label::after {
+    content: '\2713'; position: absolute; top: 10px; right: 14px;
+    color: var(--brand); font-weight: 700;
+  }
+  .check.reason input:focus-visible + label { outline: 3px solid var(--ink); outline-offset: 2px; }
+  #screen-remove .reasons + .field { border-top: 0; }
+  button.danger {
+    min-height: 60px; font-size: 20px; border-radius: 16px;
+    background: var(--bad);
+  }
+  button.danger:active { background: #7C2217; }
 </style>
 </head>
 <body>
@@ -1300,31 +1452,38 @@
   <!-- =================== PRODUCTS SCREEN =================== -->
   <section id="screen-products" hidden>
 
-    <h1>Products</h1>
-    <p class="lede" id="p-count">Reading…</p>
+    <div class="pagehead">
+      <h1>Products</h1>
+      <button type="button" id="go-add" class="addbtn"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add product</button>
+    </div>
     <p class="msg" id="p-msg" hidden></p>
 
-    <section class="panel">
-      <h2>Everything you sell</h2>
-      <div id="product-list">
-        <div class="empty">Reading…</div>
-      </div>
-    </section>
+    <div class="findbox">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="p-search" class="search" type="search" placeholder="Find by name or barcode" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="Find a product">
+    </div>
+    <p class="lede" id="p-count">Reading…</p>
 
-    <button id="go-add">Add product</button>
-    <button id="back-home" class="secondary">Back to menu</button>
+    <div id="product-list" class="plist">
+      <div class="empty">Reading…</div>
+    </div>
+
+    <button id="back-home" class="secondary" hidden>Back to menu</button>
 
   </section>
 
   <!-- ===================== ADD A PRODUCT ==================== -->
   <section id="screen-form" hidden>
 
-    <h1 id="f-title">Add product</h1>
+    <div class="pagehead">
+      <h1 id="f-title">Add product</h1>
+      <button type="button" id="f-cancel" class="backpill">&#8249; Cancel</button>
+    </div>
     <p class="lede" id="f-lede">Stock is not typed here. Save the product, then open it again and tap Stock and deliveries.</p>
     <p class="msg" id="f-msg" hidden></p>
 
     <section class="panel">
-      <h2>The product</h2>
+      <h2>Name and barcode</h2>
 
       <div class="field">
         <label for="f-name">Name</label>
@@ -1337,19 +1496,26 @@
         <input id="f-barcode" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off">
         <p class="hint">Leave empty if the item has no barcode, like most clothing.</p>
       </div>
+    </section>
 
-      <div class="field">
-        <label for="f-price">Selling price</label>
-        <input id="f-price" type="text" inputmode="numeric" autocomplete="off">
-        <p class="hint">Whole kip. Rounded to the nearest 500 when saved.</p>
+    <section class="panel">
+      <h2>Price</h2>
+      <div class="fieldpair">
+        <div class="field">
+          <label for="f-price">Selling price</label>
+          <input id="f-price" type="text" inputmode="numeric" autocomplete="off">
+          <p class="hint">Whole kip. Rounded to the nearest 500 when saved.</p>
+        </div>
+
+        <div class="field">
+          <label for="f-cost">Cost price</label>
+          <input id="f-cost" type="text" inputmode="numeric" autocomplete="off">
+          <p class="hint">What you pay the supplier. Leave empty if you do not know it yet.</p>
+        </div>
       </div>
+    </section>
 
-      <div class="field">
-        <label for="f-cost">Cost price</label>
-        <input id="f-cost" type="text" inputmode="numeric" autocomplete="off">
-        <p class="hint">What you pay the supplier. Leave empty if you do not know it yet.</p>
-      </div>
-
+    <section class="panel">
       <div class="check">
         <input id="f-expiry" type="checkbox">
         <label for="f-expiry">
@@ -1359,76 +1525,87 @@
       </div>
     </section>
 
-    <button id="f-save">Save product</button>
-    <button id="f-stock" class="secondary" hidden>Stock and deliveries</button>
-    <button id="f-cancel" class="secondary">Cancel</button>
+    <button id="f-save" class="bigsave">Save product</button>
+    <button id="f-stock" class="stockbtn" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Stock and deliveries</button>
 
   </section>
 
   <!-- ================= STOCK AND DELIVERIES ================= -->
   <section id="screen-stock" hidden>
 
-    <h1>Stock</h1>
-    <p class="lede" id="st-name"></p>
+    <div class="pagehead">
+      <h1>Stock</h1>
+      <button type="button" id="st-back" class="backpill chevback">Back to products</button>
+    </div>
     <p class="msg" id="st-msg" hidden></p>
 
-    <section class="panel">
-      <div class="row stocktotal"><span>In stock now</span><span class="sum" id="st-total">–</span></div>
-    </section>
+    <div class="stockhero">
+      <span class="initial" id="st-initial" aria-hidden="true"></span>
+      <span class="who"><span class="nm" id="st-name"></span><span class="sub">In stock now</span></span>
+      <span class="sum" id="st-total">–</span>
+    </div>
 
-    <section class="panel">
-      <h2 id="st-heading">Deliveries still in stock</h2>
-      <div id="st-list"><div class="empty">Reading…</div></div>
-    </section>
+    <div class="stockgrid">
+      <div class="stock-left">
+        <section class="panel">
+          <h2 id="st-heading">Deliveries still in stock</h2>
+          <div id="st-list"><div class="empty">Reading…</div></div>
+        </section>
 
-    <section class="panel" id="st-removed-panel" hidden>
-      <h2>Removed from stock, newest first</h2>
-      <div id="st-removed"></div>
-    </section>
-
-    <section class="panel">
-      <h2>Add a delivery</h2>
-
-      <div class="field">
-        <label for="st-qty">How many arrived</label>
-        <input id="st-qty" type="text" inputmode="numeric" autocomplete="off">
-        <p class="hint">Count single items you sell, not boxes. A box of 12 tins is 12.</p>
+        <section class="panel" id="st-removed-panel" hidden>
+          <h2>Removed from stock, newest first</h2>
+          <div id="st-removed"></div>
+        </section>
       </div>
 
-      <div class="field" id="st-expiry-field">
-        <label for="st-expiry">Expiry date</label>
-        <input id="st-expiry" type="date">
-        <p class="hint">As printed on the product. If items in one delivery have different dates, save them as separate deliveries.</p>
-      </div>
+      <div class="stock-right">
+        <section class="panel">
+          <h2>Add a delivery</h2>
 
-      <div class="field">
-        <label for="st-lot">Lot number (optional)</label>
-        <input id="st-lot" type="text" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-        <p class="hint">The batch code printed near the expiry date. Helps if a product is ever recalled.</p>
-      </div>
+          <div class="field">
+            <label for="st-qty">How many arrived</label>
+            <input id="st-qty" type="text" inputmode="numeric" autocomplete="off">
+            <p class="hint">Count single items you sell, not boxes. A box of 12 tins is 12.</p>
+          </div>
 
-      <div class="field">
-        <label for="st-cost">Cost for each one (optional)</label>
-        <input id="st-cost" type="text" inputmode="numeric" autocomplete="off">
-        <p class="hint">What you paid the supplier for one item, in kip.</p>
-      </div>
-    </section>
+          <div class="field" id="st-expiry-field">
+            <label for="st-expiry">Expiry date</label>
+            <input id="st-expiry" type="date">
+            <p class="hint">As printed on the product. If items in one delivery have different dates, save them as separate deliveries.</p>
+          </div>
 
-    <button id="st-save">Save delivery</button>
-    <button id="st-back" class="secondary">Back to products</button>
+          <div class="field">
+            <label for="st-lot">Lot number (optional)</label>
+            <input id="st-lot" type="text" maxlength="30" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+            <p class="hint">The batch code printed near the expiry date. Helps if a product is ever recalled.</p>
+          </div>
+
+          <div class="field">
+            <label for="st-cost">Cost for each one (optional)</label>
+            <input id="st-cost" type="text" inputmode="numeric" autocomplete="off">
+            <p class="hint">What you paid the supplier for one item, in kip.</p>
+          </div>
+        </section>
+
+        <button id="st-save" class="bigsave"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Save delivery</button>
+      </div>
+    </div>
 
   </section>
 
   <!-- ===================== REMOVE ITEMS (6d) ===================== -->
   <section id="screen-remove" hidden>
 
-    <h1>Remove items</h1>
-    <p class="lede" id="rm-name"></p>
+    <div class="pagehead">
+      <h1>Remove items</h1>
+      <button type="button" id="rm-back" class="backpill">&#8249; Back to stock</button>
+    </div>
+    <p class="lede rm-product" id="rm-name"></p>
     <p class="msg" id="rm-msg" hidden></p>
 
     <section class="panel">
       <h2>From this delivery</h2>
-      <div class="item">
+      <div class="item rm-batch">
         <span class="who"><span class="nm" id="rm-title"></span><span class="sub" id="rm-sub"></span></span>
         <span class="right"><span class="left" id="rm-left"></span><span id="rm-tag"></span></span>
       </div>
@@ -1445,25 +1622,27 @@
 
     <section class="panel">
       <h2>Reason</h2>
-      <div class="check">
+      <div class="reasons">
+      <div class="check reason">
         <input id="rm-r-damaged" type="radio" name="rm-reason" value="damaged">
         <label for="rm-r-damaged">Damaged
           <span class="sub">Broken, dented, opened or dirty.</span></label>
       </div>
-      <div class="check">
+      <div class="check reason">
         <input id="rm-r-expired" type="radio" name="rm-reason" value="expired">
         <label for="rm-r-expired">Expired
           <span class="sub">Past its date, or too close to its date to sell.</span></label>
       </div>
-      <div class="check">
+      <div class="check reason">
         <input id="rm-r-miscounted" type="radio" name="rm-reason" value="miscounted">
         <label for="rm-r-miscounted">Miscounted
           <span class="sub">You counted fewer on the shelf than the app says.</span></label>
       </div>
-      <div class="check">
+      <div class="check reason">
         <input id="rm-r-other" type="radio" name="rm-reason" value="other">
         <label for="rm-r-other">Other
           <span class="sub">Write a note below saying why.</span></label>
+      </div>
       </div>
       <div class="field">
         <label for="rm-note" id="rm-note-label">Note (optional)</label>
@@ -1474,8 +1653,7 @@
 
     <p class="note">Removed items cannot be put back. If you remove too many by mistake, add them again as a new delivery.</p>
 
-    <button id="rm-save" class="quiet">Remove from stock</button>
-    <button id="rm-back" class="secondary">Back to stock</button>
+    <button id="rm-save" class="danger">Remove from stock</button>
 
   </section>
 
@@ -1657,7 +1835,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Pay look build 10a-3';
+  var BUILD = 'Products look build 10a-4';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2550,49 +2728,88 @@
 
   /* ---------- the products screen ---------- */
 
+  var productRows = [];   /* the saved products, as last read */
+  var productStock = {};  /* items on record, by product id */
+
   function loadProducts() {
     $('product-list').innerHTML = '<div class="empty">Reading…</div>';
     $('p-count').textContent = 'Reading…';
 
     return Promise.all([Till.listProducts(), Till.stockByProduct()]).then(function (got) {
-      var rows = got[0];
-      var stock = got[1];
-      $('p-count').textContent = rows.length === 0
-        ? 'Nothing saved yet.'
-        : plural(rows.length, 'product saved. Tap one to change it.', 'products saved. Tap one to change it.');
-
-      if (rows.length === 0) {
-        $('product-list').innerHTML =
-          '<div class="empty">No products yet. Tap Add product below.</div>';
-        return;
-      }
-
-      var html = '';
-      rows.forEach(function (p) {
-        var sub = p.barcode ? esc(p.barcode) : 'No barcode';
-        if (p.tracksExpiry) { sub += ' · has expiry dates'; }
-        var have = stock[p.id] || 0;
-        sub += ' · <span class="' + (have > 0 ? 'instock' : 'nostock') + '">' +
-          (have > 0 ? 'In stock: ' + have.toLocaleString('en-US') : 'No stock recorded') + '</span>';
-
-        html +=
-          '<button type="button" class="item" data-id="' + esc(p.id) + '">' +
-            '<span class="who">' +
-              '<span class="nm">' + esc(p.name) + '</span>' +
-              '<span class="sub">' + sub + '</span>' +
-            '</span>' +
-            '<span class="price">' + Till.formatKip(p.priceKip || 0) +
-              ' <span class="chev">\u203A</span></span>' +
-          '</button>';
-      });
-      $('product-list').innerHTML = html;
-
+      productRows = got[0];
+      productStock = got[1];
+      showProductList();
     }).catch(function (err) {
+      productRows = [];
       $('p-count').textContent = 'The list could not be read.';
       $('product-list').innerHTML =
         '<div class="empty">' + esc(err && err.message ? err.message : err) + '</div>';
     });
   }
+
+  /* True if the product has every typed word in its name, or the typed
+     text in its barcode. Same idea as the sell screen. */
+  function productFits(p, typed) {
+    var q = Sell.plain(typed);
+    if (!q) { return true; }
+    var name = Sell.plain(p.name);
+    var compact = q.replace(/ /g, '');
+    return q.split(' ').every(function (w) { return name.indexOf(w) !== -1; }) ||
+      (!!p.barcode && String(p.barcode).indexOf(compact) !== -1);
+  }
+
+  function showProductList() {
+    var rows = productRows;
+    var typed = $('p-search').value;
+
+    if (rows.length === 0) {
+      $('p-count').textContent = 'Nothing saved yet.';
+      $('product-list').innerHTML =
+        '<div class="empty">No products yet. Tap Add product above.</div>';
+      return;
+    }
+
+    var shown = rows.filter(function (p) { return productFits(p, typed); });
+    $('p-count').textContent = Sell.plain(typed)
+      ? shown.length + ' of ' + plural(rows.length, 'product', 'products') + ' match.'
+      : plural(rows.length, 'product saved. Tap one to change it.', 'products saved. Tap one to change it.');
+
+    if (shown.length === 0) {
+      $('product-list').innerHTML = '<div class="empty">Nothing matches that.</div>';
+      return;
+    }
+
+    var html = '';
+    shown.forEach(function (p) {
+      var have = productStock[p.id] || 0;
+      var chips = have > 0
+        ? '<span class="chip ok">In stock: ' + have.toLocaleString('en-US') + '</span>'
+        : '<span class="chip warn">No stock recorded</span>';
+      if (p.tracksExpiry) { chips += '<span class="chip plain">Expiry dates</span>'; }
+
+      html +=
+        '<button type="button" class="item pcard" data-id="' + esc(p.id) + '">' +
+          '<span class="initial" data-tone="' + toneOf(p.name) + '" aria-hidden="true">' + esc(initialOf(p.name)) + '</span>' +
+          '<span class="who">' +
+            '<span class="nm">' + esc(p.name) + '</span>' +
+            '<span class="sub">' + (p.barcode ? esc(p.barcode) : 'No barcode') + '</span>' +
+            '<span class="chips">' + chips + '</span>' +
+          '</span>' +
+          '<span class="price">' + Till.formatKip(p.priceKip || 0) + '</span>' +
+        '</button>';
+    });
+    $('product-list').innerHTML = html;
+  }
+
+  $('p-search').addEventListener('input', showProductList);
+
+  /* Enter in the search box only closes the keyboard. */
+  $('p-search').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.keyCode === 13) {
+      event.preventDefault();
+      event.target.blur();
+    }
+  });
 
   /* ---------- the home screen ---------- */
 
@@ -2763,6 +2980,7 @@
 
   $('go-products').addEventListener('click', function () {
     say('p-msg', '', '');
+    $('p-search').value = '';
     show('products');
     loadProducts();
   });
@@ -2878,6 +3096,8 @@
     stockProduct = product;
     deliveryId = Till.newBatchId();
     $('st-name').textContent = product.name;
+    $('st-initial').textContent = initialOf(product.name);
+    $('st-initial').setAttribute('data-tone', toneOf(product.name));
     $('st-qty').value = '';
     $('st-expiry').value = '';
     $('st-lot').value = '';
@@ -2918,15 +3138,18 @@
           ' · ' + b.qtyReceived.toLocaleString('en-US') + ' arrived';
         if (b.lot) { sub += ' · Lot ' + esc(b.lot); }
         if (b.costKip) { sub += ' · ' + Till.formatKip(b.costKip) + ' each'; }
+        var e = Till.expiryState(b.expiry, todayText);
         html +=
-          '<div class="item hasaction">' +
-            '<span class="who"><span class="nm">' + title + '</span>' +
-            '<span class="sub">' + sub + '</span></span>' +
-            '<span class="right"><span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
-              expiryTag(Till.expiryState(b.expiry, todayText)) + '</span>' +
-          '</div>' +
-          '<div class="rowaction"><button type="button" class="secondary" data-remove="' + esc(b.id) + '">' +
-            'Remove items</button></div>';
+          '<div class="dcard" data-state="' + esc(e.state) + '">' +
+            '<div class="dtop">' +
+              '<span class="who"><span class="nm">' + title + '</span>' +
+              '<span class="sub">' + sub + '</span></span>' +
+              '<span class="left">' + b.qtyRemaining.toLocaleString('en-US') + ' left</span>' +
+            '</div>' +
+            '<div class="dfoot">' + expiryTag(e) +
+              '<button type="button" class="secondary" data-remove="' + esc(b.id) + '">Remove items</button>' +
+            '</div>' +
+          '</div>';
       });
       $('st-list').innerHTML = html;
     }).catch(function (err) {
