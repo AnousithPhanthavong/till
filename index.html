@@ -966,6 +966,10 @@
   #r-print { min-height: 64px; font-size: 22px; border-radius: 18px; }
   #r-print .ico { width: 28px; height: 28px; }
   .r-actions .moneybtn { min-height: 60px; font-size: 20px; }
+  .r-actions .voidbtn { color: #B3261E; border-color: #EFC2BC; background: #FFF7F6; margin-top: 18px; }
+  #vd-save { width: 100%; }
+  #vd-what { padding: 0 18px; margin: 6px 0 0; color: var(--ink); line-height: 1.5; }
+  .r-actions button[hidden] { display: none; }
   @media (min-width: 900px) {
     #screen-receipt:not([hidden]) {
       display: grid;
@@ -1700,7 +1704,64 @@
       <p class="msg" id="r-note" hidden></p>
       <button id="r-new" class="moneybtn">New sale</button>
       <button id="r-back" class="secondary">Back</button>
+      <button id="r-void" class="secondary voidbtn" hidden>Void this sale</button>
     </div>
+
+  </section>
+
+  <!-- ================== VOID A SALE SCREEN (Step 12) ================ -->
+  <section id="screen-void" class="owner-screen" hidden>
+
+    <div class="pagehead">
+      <h1>Void this sale</h1>
+      <button type="button" id="vd-back" class="backpill">&#8249; Back to receipt</button>
+    </div>
+    <p class="msg" id="vd-msg" hidden></p>
+
+    <section class="panel">
+      <h2>The sale</h2>
+      <div class="item">
+        <span class="who"><span class="nm" id="vd-title"></span><span class="sub" id="vd-sub"></span></span>
+        <span class="right"><span class="left" id="vd-total"></span></span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Reason</h2>
+      <div class="reasons">
+      <div class="check reason">
+        <input id="vd-r-wrong_items" type="radio" name="vd-reason" value="wrong_items">
+        <label for="vd-r-wrong_items">Wrong items rung up
+          <span class="sub">The wrong things or wrong amounts were sold.</span></label>
+      </div>
+      <div class="check reason">
+        <input id="vd-r-returned" type="radio" name="vd-reason" value="returned">
+        <label for="vd-r-returned">Customer returned the items
+          <span class="sub">The customer brought everything back.</span></label>
+      </div>
+      <div class="check reason">
+        <input id="vd-r-wrong_payment" type="radio" name="vd-reason" value="wrong_payment">
+        <label for="vd-r-wrong_payment">Wrong payment type
+          <span class="sub">Saved as Cash but paid by QR, or the other way round.</span></label>
+      </div>
+      <div class="check reason">
+        <input id="vd-r-other" type="radio" name="vd-reason" value="other">
+        <label for="vd-r-other">Other
+          <span class="sub">Write a note below saying why.</span></label>
+      </div>
+      </div>
+      <div class="field">
+        <label for="vd-note" id="vd-note-label">Note (optional)</label>
+        <input id="vd-note" type="text" maxlength="60" autocomplete="off" enterkeyhint="done">
+        <p class="hint">60 characters at most.</p>
+      </div>
+    </section>
+
+    <section class="panel dangerzone">
+      <h2>What happens</h2>
+      <p class="note" id="vd-what"></p>
+      <div class="btnpad"><button id="vd-save" class="danger">Void this sale</button></div>
+    </section>
 
   </section>
 
@@ -2296,7 +2357,7 @@
      old db.js, say so instead of quietly doing nothing. */
   function dbIsCurrent() {
     return typeof Till !== 'undefined' && typeof Till.startFresh === 'function' &&
-      typeof Till.deleteProduct === 'function';
+      typeof Till.deleteProduct === 'function' && typeof Till.voidSale === 'function';
   }
   function cartIsCurrent() {
     return typeof Sell !== 'undefined' && typeof Sell.readCartCopy === 'function';
@@ -2317,7 +2378,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Delete build 11';
+  var BUILD = 'Void build 12a';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2341,6 +2402,7 @@
     $('screen-pay').hidden = (which !== 'pay');
     $('screen-done').hidden = (which !== 'done');
     $('screen-receipt').hidden = (which !== 'receipt');
+    $('screen-void').hidden = (which !== 'void');
     $('screen-shop').hidden = (which !== 'shop');
     $('screen-products').hidden = (which !== 'products');
     $('screen-form').hidden = (which !== 'form');
@@ -3032,6 +3094,7 @@
     $('r-paper').innerHTML = '';
     $('r-paper').hidden = true;
     $('r-print').disabled = true;
+    $('r-void').hidden = true;
     say('r-note', '', '');
     $('r-lede').textContent = 'Reading the saved sale…';
     if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
@@ -3046,6 +3109,7 @@
       $('r-print').disabled = false;
       showPrintState();
       $('r-lede').textContent = 'Show this to the customer, or tap ' + $('r-print-text').textContent + '.';
+      return showVoidState(saleId);
     }).catch(function (err) {
       $('r-lede').textContent = '';
       say('r-msg', 'bad', String(err && err.message ? err.message : err));
@@ -3094,6 +3158,126 @@
     } else {
       show('done');
     }
+  });
+
+  /* ---------- voiding a sale (Step 12) ---------- */
+
+  var voidId = '';          /* made when the void screen opens: two taps save once */
+  var voidingSaleId = '';
+  var justVoided = '';      /* shows a green note once, after a void is saved */
+
+  function voidWhen(ymd, iso) {
+    return Receipt.dateText(ymd) + ' ' + timeOf(iso);
+  }
+
+  /* On the receipt: a voided sale says so in red and has no Void button.
+     The button shows only for the owner, on receipts opened from history. */
+  function showVoidState(saleId) {
+    return Till.voidFor(saleId).then(function (v) {
+      if (saleId !== receiptSaleId || $('screen-receipt').hidden) { return; }
+      if (v) {
+        $('r-void').hidden = true;
+        var why = Till.VOID_REASONS[v.reason] || v.reason;
+        say('r-msg', 'bad', 'VOIDED on ' + voidWhen(v.date, v.at) + '. Reason: ' + why +
+          (v.note ? ' (' + v.note + ')' : '') + '.');
+        if (justVoided === saleId) {
+          justVoided = '';
+          var back = v.returnedQty === 1 ? '1 item went' : v.returnedQty + ' items went';
+          say('r-note', 'good', 'Saved. ' + back + ' back into stock.' +
+            (v.unreturnedQty ? ' ' + v.unreturnedQty + ' were not in stock records, so nothing was returned for them.' : ''));
+        }
+      } else {
+        $('r-void').hidden = !(receiptFrom === 'day' && pinRole !== 'staff');
+      }
+    }).catch(function () {
+      $('r-void').hidden = true;
+    });
+  }
+
+  function openVoid() {
+    var saleId = receiptSaleId;
+    if (!saleId) { return; }
+    voidingSaleId = saleId;
+    voidId = Till.newVoidId();
+    say('vd-msg', '', '');
+    document.getElementsByName('vd-reason').forEach(function (r) { r.checked = false; });
+    $('vd-note').value = '';
+    $('vd-note-label').textContent = 'Note (optional)';
+    $('vd-title').textContent = 'Reading…';
+    $('vd-sub').textContent = '';
+    $('vd-total').textContent = '';
+    $('vd-what').textContent = '';
+    $('vd-save').disabled = true;
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+    show('void');
+
+    Promise.all([Till.getSale(saleId), Till.voidFor(saleId)]).then(function (got) {
+      if (voidingSaleId !== saleId) { return; }
+      var found = got[0];
+      var problem = Till.voidProblem(found && found.sale, got[1]);
+      if (problem) { throw new Error(problem); }
+      var sale = found.sale;
+      var plan = Till.voidReturns(found.lines);
+      var back = plan.returns.reduce(function (n, r) { return n + r.qty; }, 0);
+      $('vd-title').textContent = 'No. ' + sale.number + ' \u00B7 ' + voidWhen(sale.date, sale.at);
+      $('vd-sub').textContent = (sale.method === 'cash' ? 'Cash' : 'QR') + ' \u00B7 ' +
+        (sale.itemCount === 1 ? '1 item' : sale.itemCount + ' items');
+      $('vd-total').textContent = Till.formatKip(sale.totalKip);
+      var money = sale.method === 'cash'
+        ? 'Give the customer back ' + Till.formatKip(sale.totalKip) + ' in cash.'
+        : 'Send ' + Till.formatKip(sale.totalKip) + ' back from the bank app. The till does not do this.';
+      var stock = back === 0 ? 'No items go back into stock (none were in stock records).'
+        : (back === 1 ? '1 item goes' : back + ' items go') + ' back into the deliveries they came from.' +
+          (plan.unreturnedQty ? ' ' + plan.unreturnedQty + ' were not in stock records and are not returned.' : '');
+      $('vd-what').textContent = money + ' ' + stock +
+        ' The money comes off the totals of ' + Receipt.dateText(sale.date) + '. A void cannot be undone.' +
+        ' If a returned item cannot be sold again, remove it afterwards with Remove items \u2192 Damaged.';
+      $('vd-save').disabled = false;
+    }).catch(function (err) {
+      if (voidingSaleId !== saleId) { return; }
+      $('vd-title').textContent = '';
+      say('vd-msg', 'bad', String(err && err.message ? err.message : err));
+    });
+  }
+
+  function chosenVoidReason() {
+    var picked = document.querySelector('input[name="vd-reason"]:checked');
+    return picked ? picked.value : '';
+  }
+
+  $('r-void').addEventListener('click', function () {
+    if ($('r-void').hidden || pinRole === 'staff') { return; }
+    openVoid();
+  });
+
+  document.getElementsByName('vd-reason').forEach(function (r) {
+    r.addEventListener('change', function () {
+      $('vd-note-label').textContent = chosenVoidReason() === 'other' ? 'Note (needed for Other)' : 'Note (optional)';
+    });
+  });
+
+  $('vd-back').addEventListener('click', function () {
+    openReceipt(voidingSaleId, 'day');
+  });
+
+  $('vd-save').addEventListener('click', function () {
+    if ($('vd-save').disabled) { return; }
+    var saleId = voidingSaleId;
+    var reason = chosenVoidReason();
+    var note = $('vd-note').value;
+    if (!reason) { say('vd-msg', 'bad', 'Choose a reason.'); return; }
+    if (reason === 'other' && !note.trim()) { say('vd-msg', 'bad', 'For "Other", write a short note saying why.'); return; }
+    if (!window.confirm('Void ' + $('vd-title').textContent + ', ' + $('vd-total').textContent + '?\n\n' +
+        'This cannot be undone.')) { return; }
+    $('vd-save').disabled = true;
+    say('vd-msg', '', '');
+    Till.voidSale(voidId, saleId, { reason: reason, note: note }).then(function () {
+      justVoided = saleId;
+      openReceipt(saleId, 'day');
+    }).catch(function (err) {
+      say('vd-msg', 'bad', String(err && err.message ? err.message : err));
+      $('vd-save').disabled = false;
+    });
   });
 
   /* A scan on the Sale saved or Receipt screen starts the next sale

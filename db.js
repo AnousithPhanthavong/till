@@ -997,6 +997,240 @@
   }
 
 
+  /* ---------- voiding a sale (Step 12) ----------
+     A void is a new record in the sales table (type 'void') that points
+     back at the sale. The sale itself is never changed or deleted. In the
+     same all-or-nothing save, every item goes back to the exact delivery
+     it was taken from. Items sold "not in stock records", and sales saved
+     before stock was taken (before 6c), return nothing: there is nowhere
+     on record to return them to. The void has no `number` and no
+     `totalKip`, so receipt numbering and backup totals ignore it. */
+
+  var VOID_REASONS = {
+    wrong_items: 'Wrong items rung up',
+    returned: 'Customer returned the items',
+    wrong_payment: 'Wrong payment type',
+    other: 'Other'
+  };
+  var MAX_VOID_NOTE = 60;
+
+  /* A fresh id for a void. The void screen asks for one when it opens, so
+     pressing the button twice can only ever save one void. */
+  function newVoidId() {
+    return newId('void');
+  }
+
+  /* The void of one sale, from a list of sales records, or null. Pure. */
+  function findVoid(sales, saleId) {
+    return (sales || []).filter(function (s) {
+      return s && s.type === 'void' && s.saleId === saleId;
+    })[0] || null;
+  }
+
+  /* Why this sale cannot be voided, or '' if it can. Pure. */
+  function voidProblem(sale, existingVoid) {
+    if (!sale) { return 'This sale could not be found.'; }
+    if (sale.type !== 'sale') { return 'Only a sale can be voided.'; }
+    if (existingVoid) { return 'This sale was already voided.'; }
+    return '';
+  }
+
+  /* What goes back into stock, worked out from the saved lines. Pure.
+     Returns { returns: [{batchId, productId, qty}], unreturnedQty } or
+     throws if a line's own record does not add up. */
+  function voidReturns(lines) {
+    var byBatch = {};
+    var order = [];
+    var unreturned = 0;
+    (lines || []).forEach(function (l) {
+      var qty = Number.isInteger(l.qty) && l.qty > 0 ? l.qty : 0;
+      var taken = 0;
+      (Array.isArray(l.batches) ? l.batches : []).forEach(function (b) {
+        if (!b || typeof b.batchId !== 'string' || !Number.isInteger(b.qty) || b.qty < 1) {
+          throw new Error('The stock record of this sale is damaged. Nothing was voided.');
+        }
+        taken += b.qty;
+        if (!byBatch[b.batchId]) {
+          byBatch[b.batchId] = { batchId: b.batchId, productId: l.productId, qty: 0 };
+          order.push(b.batchId);
+        }
+        byBatch[b.batchId].qty += b.qty;
+      });
+      if (taken > qty) {
+        throw new Error('The stock record of this sale does not add up. Nothing was voided.');
+      }
+      unreturned += qty - taken;
+    });
+    return { returns: order.map(function (id) { return byBatch[id]; }), unreturnedQty: unreturned };
+  }
+
+  /* Checks the form and builds most of the record. Throws a plain-language
+     error if anything is wrong. Saves nothing. */
+  function buildVoid(voidId, saleId, input, now) {
+    if (typeof voidId !== 'string' || !/^void_[a-z0-9_]+$/.test(voidId)) {
+      throw new Error('This void has no proper number. Go back and open it again.');
+    }
+    if (typeof saleId !== 'string' || !saleId) {
+      throw new Error('Choose which sale to void.');
+    }
+    input = input || {};
+    var reason = String(input.reason || '');
+    if (!Object.prototype.hasOwnProperty.call(VOID_REASONS, reason)) {
+      throw new Error('Choose a reason.');
+    }
+    var note = tidy(input.note);
+    if (note.length > MAX_VOID_NOTE) {
+      throw new Error('The note is too long (' + MAX_VOID_NOTE + ' characters at most).');
+    }
+    if (reason === 'other' && !note) {
+      throw new Error('For "Other", write a short note saying why.');
+    }
+    return {
+      id: voidId,
+      type: 'void',
+      saleId: saleId,
+      reason: reason,
+      note: note,
+      at: now.toISOString(),
+      date: localDate(now)
+    };
+  }
+
+  /* Voids a whole sale, all or nothing, then reads it back to prove it.
+     - Never changes the sale. Never voids the same sale twice.
+     - Same void id twice (a double tap or retry) saves once and returns
+       stock once; the saved one is returned.
+     Resolves to { void: record, alreadySaved }. */
+  function voidSale(voidId, saleId, input) {
+    var built;
+    try {
+      built = buildVoid(voidId, saleId, input, new Date());
+    } catch (err) {
+      return Promise.reject(err);
+    }
+
+    return open().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var t = db.transaction(['sales', 'saleLines', 'batches'], 'readwrite');
+        var sales = t.objectStore('sales');
+        var linesStore = t.objectStore('saleLines');
+        var batchStore = t.objectStore('batches');
+        var result = null;
+        var problem = '';
+
+        function stop(message) {
+          problem = message;
+          t.abort();
+        }
+
+        sales.getAll().onsuccess = function (e) {
+          var all = e.target.result;
+          var same = all.filter(function (s) { return s && s.id === voidId; })[0];
+          if (same) {
+            if (same.type !== 'void' || same.saleId !== saleId) { stop('This void number is already used. Go back and open it again.'); return; }
+            result = { void: same, alreadySaved: true };
+            return;
+          }
+          var sale = all.filter(function (s) { return s && s.id === saleId; })[0];
+          problem = voidProblem(sale, findVoid(all, saleId));
+          if (problem) { t.abort(); return; }
+
+          linesStore.index('saleId').getAll(saleId).onsuccess = function (e2) {
+            var plan;
+            try {
+              plan = voidReturns(e2.target.result);
+            } catch (err) {
+              stop(err.message);
+              return;
+            }
+            if (plan.returns.length === 0) { save([]); return; }
+
+            /* Read every delivery first; check all before writing any. */
+            var got = {};
+            var waiting = plan.returns.length;
+            plan.returns.forEach(function (r) {
+              batchStore.get(r.batchId).onsuccess = function (e3) {
+                got[r.batchId] = e3.target.result;
+                waiting -= 1;
+                if (waiting === 0) { check(); }
+              };
+            });
+
+            function check() {
+              var returned = [];
+              for (var i = 0; i < plan.returns.length; i++) {
+                var r = plan.returns[i];
+                var b = got[r.batchId];
+                if (!b || !Number.isInteger(b.qtyRemaining) || !Number.isInteger(b.qtyReceived)) {
+                  stop('A delivery this sale came from is no longer saved. Nothing was voided.');
+                  return;
+                }
+                if (b.qtyRemaining + r.qty > b.qtyReceived) {
+                  stop('Returning these items would put more in a delivery than arrived. Nothing was voided.');
+                  return;
+                }
+                returned.push({
+                  batchId: b.id, productId: b.productId, qty: r.qty,
+                  expiry: b.expiry || '', qtyBefore: b.qtyRemaining, qtyAfter: b.qtyRemaining + r.qty
+                });
+              }
+              returned.forEach(function (x) {
+                got[x.batchId].qtyRemaining = x.qtyAfter;
+                batchStore.put(got[x.batchId]);
+              });
+              save(returned);
+            }
+
+            function save(returned) {
+              built.saleNumber = sale.number;
+              built.saleDate = sale.date;
+              built.saleAt = sale.at;
+              built.method = sale.method;
+              built.voidKip = sale.totalKip;
+              built.itemCount = sale.itemCount;
+              built.returned = returned;
+              built.returnedQty = returned.reduce(function (n, x) { return n + x.qty; }, 0);
+              built.unreturnedQty = plan.unreturnedQty;
+              /* add, not put: add refuses to overwrite anything. */
+              sales.add(built);
+              result = { void: built, alreadySaved: false };
+            }
+          };
+        };
+
+        t.oncomplete = function () { resolve(result); };
+        t.onerror = function () { reject(new Error(problem || 'The void was NOT saved. Try again.')); };
+        t.onabort = function () { reject(new Error(problem || 'The void was NOT saved. Try again.')); };
+      });
+    }).then(function (result) {
+      var v = result.void;
+      var reads = [get('sales', voidId), get('sales', saleId)];
+      if (!result.alreadySaved) {
+        v.returned.forEach(function (x) { reads.push(get('batches', x.batchId)); });
+      }
+      return Promise.all(reads).then(function (r) {
+        var saved = r[0];
+        var ok = saved && saved.type === 'void' && saved.saleId === saleId &&
+          saved.voidKip === v.voidKip && r[1] && r[1].type === 'sale';
+        if (ok && !result.alreadySaved) {
+          v.returned.forEach(function (x, i) {
+            if (!r[i + 2] || r[i + 2].qtyRemaining !== x.qtyAfter) { ok = false; }
+          });
+        }
+        if (!ok) {
+          return Promise.reject(new Error('The void did not save properly. Open the sale again and check.'));
+        }
+        return { void: saved, alreadySaved: result.alreadySaved };
+      });
+    });
+  }
+
+  /* The void of one sale, or null. */
+  function voidFor(saleId) {
+    return getAll('sales').then(function (rows) { return findVoid(rows, saleId); });
+  }
+
+
   /* ---------- expiry warnings ---------- */
 
   var SOON_DAYS = 60;
@@ -1577,7 +1811,15 @@
     newRemovalId: newRemovalId,
     removalProblem: removalProblem,
     removeStock: removeStock,
-    removalsForProduct: removalsForProduct
+    removalsForProduct: removalsForProduct,
+    VOID_REASONS: VOID_REASONS,
+    MAX_VOID_NOTE: MAX_VOID_NOTE,
+    newVoidId: newVoidId,
+    findVoid: findVoid,
+    voidProblem: voidProblem,
+    voidReturns: voidReturns,
+    voidSale: voidSale,
+    voidFor: voidFor
   };
 
 }(typeof window !== 'undefined' ? window : globalThis));
