@@ -130,6 +130,15 @@
     margin-bottom: 22px;
   }
   @media (max-width: 700px) { .menu-top { grid-template-columns: 1fr; } }
+  /* Staff mode (10b-2): owner parts of the Menu and the Menu dot are hidden. */
+  .staff-part { display: none !important; }
+  body[data-role="staff"] .staff-part { display: block !important; }
+  body[data-role="staff"] .owner-part,
+  body[data-role="staff"] #tb-dot { display: none !important; }
+  body[data-role="staff"] .menu-top { grid-template-columns: 1fr; }
+  .staffbox { text-align: center; padding: 16px 18px 18px; }
+  .staffbox p { margin: 0 0 12px; color: var(--muted); }
+  .staffbox .staffmode { display: block; font-weight: 700; color: var(--text); margin-bottom: 4px; }
   button.bigsell {
     display: flex;
     align-items: center;
@@ -1419,7 +1428,7 @@
 
     <div id="lk-padview" hidden>
       <p class="lk-shop" id="lk-shop"></p>
-      <h1 class="lk-title">Enter PIN</h1>
+      <h1 class="lk-title" id="lk-title">Enter PIN</h1>
       <div class="lk-dots" id="lk-dots"><span></span><span></span><span></span><span></span></div>
       <p class="lk-msg" id="lk-msg"></p>
       <div class="lk-pad" id="lk-pad">
@@ -1429,6 +1438,7 @@
         <span></span><button type="button" data-d="0">0</button><button type="button" class="lk-del" data-d="back" aria-label="Delete">&#9003;</button>
       </div>
       <button type="button" class="linkish" id="lk-forgot">Forgot owner PIN?</button>
+      <button type="button" class="linkish" id="lk-cancel" hidden>Cancel, stay in staff mode</button>
     </div>
 
     <div id="lk-resetview" hidden>
@@ -1472,11 +1482,11 @@
   <section id="screen-home">
 
     <h1 id="verdict">Checking…</h1>
-    <p class="lede" id="lede">Reading what is saved on this device.</p>
+    <p class="lede owner-part" id="lede">Reading what is saved on this device.</p>
 
     <div class="menu-top">
       <button id="go-sell" class="bigsell"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.6 12.2a2 2 0 0 0 2 1.6h7.9a2 2 0 0 0 2-1.5L21 8H6"/></svg>Sell</button>
-      <div class="todaycard"><span class="lbl">Today</span><span class="v" id="today-sales">–</span></div>
+      <div class="todaycard owner-part"><span class="lbl">Today</span><span class="v" id="today-sales">–</span></div>
     </div>
 
     <section class="panel alert soon-only" id="cart-panel" hidden>
@@ -1488,17 +1498,22 @@
       </div>
     </section>
 
-    <section class="panel alert soon-only" id="backup-due" hidden>
+    <section class="panel alert soon-only owner-part" id="backup-due" hidden>
       <h2 style="color: var(--warn)">Backup due</h2>
       <div class="row"><span id="backup-due-text"></span></div>
     </section>
 
-    <section class="panel alert" id="exp-panel" hidden>
+    <section class="panel alert owner-part" id="exp-panel" hidden>
       <h2 id="exp-heading">Expiry</h2>
       <div id="exp-list"></div>
     </section>
 
-    <div class="groups">
+    <section class="panel staffbox staff-part" id="staff-box">
+      <p><span class="staffmode">Staff mode</span>Stock, reports and settings need the owner PIN.</p>
+      <button type="button" id="go-owner">Owner</button>
+    </section>
+
+    <div class="groups owner-part">
       <section class="group mint">
         <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Stock</h2>
         <button id="go-products" class="tile">Products</button>
@@ -1517,7 +1532,7 @@
       </section>
     </div>
 
-    <details class="devinfo">
+    <details class="devinfo owner-part">
       <summary>Device details</summary>
     <section class="panel">
       <h2>Saved on this device</h2>
@@ -2287,7 +2302,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'PIN build 10b-1';
+  var BUILD = 'Staff build 10b-2a';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2304,6 +2319,8 @@
   /* ---------- moving between the two screens ---------- */
 
   function show(which) {
+    /* Staff never reach an owner screen, whatever button led here. */
+    if (pinRole === 'staff' && !staffMay(which)) { openSell(); return; }
     $('screen-home').hidden = (which !== 'home');
     $('screen-sell').hidden = (which !== 'sell');
     $('screen-pay').hidden = (which !== 'pay');
@@ -2330,6 +2347,14 @@
   }
 
   var currentScreen = 'home';
+
+  /* Screens staff may see (10b-2): selling, paying, the sale just saved
+     and its receipt. A receipt opened from Sales history is owner only. */
+  var STAFF_SCREENS = ['home', 'sell', 'pay', 'done'];
+  function staffMay(which) {
+    if (which === 'receipt') { return receiptFrom !== 'day'; }
+    return STAFF_SCREENS.indexOf(which) !== -1;
+  }
   var MENU_SCREENS = ['sell', 'done', 'receipt', 'history', 'day', 'turnover', 'gaps', 'products'];
 
   /* ---------- the top bar ---------- */
@@ -4838,8 +4863,16 @@
   var CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';  /* no 0/O, 1/I/L */
 
   /* Who opened the till: '' when no PINs are set, else 'owner' or 'staff'.
-     Kept in memory only. 10b-2 will use it to limit staff. */
+     Kept in memory only. Staff see only selling screens (10b-2). */
   var pinRole = '';
+
+  function setRole(role) {
+    pinRole = role || '';
+    if (pinRole) { document.body.setAttribute('data-role', pinRole); }
+    else { document.body.removeAttribute('data-role'); }
+    if (pinRole === 'staff' && !staffMay(currentScreen)) { openSell(); }
+    else if (currentScreen === 'home') { refresh(); }
+  }
 
   function canScramble() {
     return !!(window.crypto && window.crypto.subtle && window.crypto.getRandomValues &&
@@ -5019,7 +5052,7 @@
       return savePins(row, p.owner, p.staff, p.code);
     }).then(function () {
       pendingPins = null;
-      pinRole = 'owner';
+      setRole('owner');
       clearPinBoxes();
       showPinForm();
       say('pn-msg', 'good', 'PINs saved. From now on the till asks for a PIN each time it opens.');
@@ -5108,7 +5141,12 @@
     $('lk-msg').textContent = text;
   }
 
-  function showLock(row) {
+  var lockOwnerOnly = false;  /* true when staff asked to switch to owner */
+
+  function showLock(row, ownerOnly) {
+    lockOwnerOnly = ownerOnly === true;
+    $('lk-title').textContent = lockOwnerOnly ? 'Owner PIN' : 'Enter PIN';
+    $('lk-cancel').hidden = !lockOwnerOnly;
     lockPins = row;
     lockEntry = '';
     lockBusy = false;
@@ -5123,7 +5161,13 @@
   }
 
   function unlock(role) {
-    pinRole = role;
+    closeLock();
+    setRole(role);
+  }
+
+  /* Takes the lock away without changing who is using the till. */
+  function closeLock() {
+    lockOwnerOnly = false;
     lockPins = null;
     lockEntry = '';
     pendingReset = null;
@@ -5139,7 +5183,7 @@
     var slow = setTimeout(function () { $('lock').hidden = true; }, 5000);
     return getPins().then(function (row) {
       clearTimeout(slow);
-      if (row) { showLock(row); } else { pinRole = ''; $('lock').hidden = true; }
+      if (row) { showLock(row); } else { setRole(''); $('lock').hidden = true; }
     }).catch(function () {
       clearTimeout(slow);
       $('lock').hidden = true;
@@ -5150,6 +5194,7 @@
     lockBusy = true;
     fits(pin, lockPins.owner).then(function (isOwner) {
       if (isOwner) { return 'owner'; }
+      if (lockOwnerOnly) { return ''; }
       return fits(pin, lockPins.staff).then(function (isStaff) { return isStaff ? 'staff' : ''; });
     }).then(function (role) {
       lockBusy = false;
@@ -5207,6 +5252,19 @@
     if (!$('lock').hidden && !$('lock').contains(event.target) && event.target.blur) {
       event.target.blur();
     }
+  });
+
+  /* Staff switch up to owner from the Menu. */
+  $('go-owner').addEventListener('click', function () {
+    $('go-owner').blur();
+    getPins().then(function (row) {
+      if (row) { showLock(row, true); } else { setRole(''); }
+    }).catch(function () { /* stays in staff mode */ });
+  });
+
+  $('lk-cancel').addEventListener('click', function () {
+    if (!lockOwnerOnly) { return; }
+    closeLock();
   });
 
   /* ----- forgot owner PIN ----- */
