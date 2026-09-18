@@ -1361,6 +1361,46 @@
   .minirc { margin: 0 0 14px; border: 0; border-radius: 6px; box-shadow: 0 6px 20px rgba(120, 60, 80, 0.12); }
   .minirc .rc-phone:empty { display: none; }
   .pv-gap { text-align: center; color: #999; letter-spacing: 4px; padding: 6px 0; }
+  /* ---------- PIN lock and PIN setup (10b-1) ---------- */
+  #lock {
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    overflow-y: auto;
+    padding: calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 24px);
+  }
+  #lock[hidden] { display: none; }
+  .lk-box { max-width: 22rem; margin: 0 auto; text-align: center; }
+  .lk-logo { width: 72px; height: 72px; border-radius: 18px; margin: 8px auto 10px; display: block; }
+  .lk-shop { font-size: 16px; color: var(--muted); margin: 0 0 4px; }
+  .lk-title { margin: 0 0 6px; }
+  .lk-dots { display: flex; justify-content: center; gap: 18px; margin: 18px 0 10px; }
+  .lk-dots span { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--brand); }
+  .lk-dots span.on { background: var(--brand); }
+  .lk-dots.shake { animation: lkshake 0.35s; }
+  @keyframes lkshake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+  .lk-msg { min-height: 24px; margin: 0 0 8px; font-size: 16px; font-weight: 600; color: var(--bad); }
+  .lk-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 6px 0 14px; }
+  .lk-pad button {
+    margin: 0; min-height: 72px; font-size: 30px; font-weight: 600;
+    color: var(--ink); background: var(--card);
+    border: 1px solid var(--line); border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.08);
+    touch-action: manipulation;
+  }
+  .lk-pad button:active { background: var(--soft); }
+  .lk-pad button.lk-del { font-size: 24px; color: var(--muted); }
+  #lock .panel, #lock .lede, #lock .msg { text-align: left; }
+  .codebox {
+    margin: 14px 18px 6px; padding: 16px; border-radius: 14px;
+    background: var(--peach-soft); text-align: center;
+    font: 700 34px/1.2 ui-monospace, "SF Mono", Consolas, monospace; letter-spacing: 4px;
+    color: var(--ink); user-select: all; -webkit-user-select: all;
+  }
+  .pinbox { -webkit-text-security: disc; letter-spacing: 6px; font-size: 22px !important; }
+  main > #screen-pins { max-width: 40rem; }
+  .pinstate[data-state="on"] { background: var(--mint-soft); border-color: transparent; }
+  .pinstate[data-state="off"] { background: var(--peach-soft); border-color: transparent; }
+  .pinstate .row { border-top: 0; }
 </style>
 </head>
 <body>
@@ -1371,6 +1411,61 @@
   <span class="tb-net" id="tb-net">Online</span>
   <button type="button" class="tb-menu" id="tb-menu" hidden>&#9776; Menu<span class="tb-dot" id="tb-dot" hidden></span></button>
 </header>
+
+<!-- ============ PIN LOCK (10b-1): covers everything until a PIN is typed ============ -->
+<div id="lock" data-mode="wait" role="dialog" aria-modal="true" aria-label="Enter PIN">
+  <div class="lk-box">
+    <img class="lk-logo" src="./icon-180.png" alt="">
+
+    <div id="lk-padview" hidden>
+      <p class="lk-shop" id="lk-shop"></p>
+      <h1 class="lk-title">Enter PIN</h1>
+      <div class="lk-dots" id="lk-dots"><span></span><span></span><span></span><span></span></div>
+      <p class="lk-msg" id="lk-msg"></p>
+      <div class="lk-pad" id="lk-pad">
+        <button type="button" data-d="1">1</button><button type="button" data-d="2">2</button><button type="button" data-d="3">3</button>
+        <button type="button" data-d="4">4</button><button type="button" data-d="5">5</button><button type="button" data-d="6">6</button>
+        <button type="button" data-d="7">7</button><button type="button" data-d="8">8</button><button type="button" data-d="9">9</button>
+        <span></span><button type="button" data-d="0">0</button><button type="button" class="lk-del" data-d="back" aria-label="Delete">&#9003;</button>
+      </div>
+      <button type="button" class="linkish" id="lk-forgot">Forgot owner PIN?</button>
+    </div>
+
+    <div id="lk-resetview" hidden>
+      <h1 class="lk-title">New owner PIN</h1>
+      <p class="lede">Type the reset code from your paper, then choose a new owner PIN.</p>
+      <p class="msg banner" id="lk-rmsg" hidden></p>
+      <section class="panel" id="lk-rform">
+        <div class="field">
+          <label for="lk-code">Reset code</label>
+          <input id="lk-code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+        </div>
+        <div class="fieldpair">
+          <div class="field">
+            <label for="lk-new">New owner PIN</label>
+            <input id="lk-new" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="lk-new2">Again</label>
+            <input id="lk-new2" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+        </div>
+      </section>
+      <button type="button" id="lk-rsave" class="bigsave">Next</button>
+      <section class="panel" id="lk-rcode" hidden>
+        <h2>Your new reset code</h2>
+        <div class="codebox" id="lk-newcode"></div>
+        <p class="note" style="margin: 6px 18px 12px">The old code no longer works. Write this one on paper and keep it away from the counter.</p>
+        <div class="check">
+          <input id="lk-wrote" type="checkbox">
+          <label for="lk-wrote">I have written this code on paper</label>
+        </div>
+        <div class="btnpad"><button type="button" id="lk-rdone" class="bigsave" disabled>Save and open the till</button></div>
+      </section>
+      <button type="button" class="linkish" id="lk-rback">Back to the PIN pad</button>
+    </div>
+  </div>
+</div>
 <main>
 
   <!-- ===================== HOME SCREEN ===================== -->
@@ -1418,6 +1513,7 @@
         <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l2-5h14l2 5"/><path d="M3 9h18a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0"/><path d="M5 12v8h14v-8"/><path d="M10 20v-5h4v5"/></svg>Shop</h2>
         <button id="go-backup" class="tile">Backup</button>
         <button id="go-shop" class="tile">Shop details</button>
+        <button id="go-pins" class="tile">PINs</button>
       </section>
     </div>
 
@@ -2084,6 +2180,67 @@
 
   </section>
 
+  <!-- ============ PINS SCREEN (10b-1): set the owner and staff PINs ============ -->
+  <section id="screen-pins" class="owner-screen" hidden>
+
+    <div class="pagehead">
+      <h1>PINs</h1>
+      <button type="button" id="pn-back" class="backpill">&#8249; Back</button>
+    </div>
+    <p class="lede">A PIN is a 4-number code the till asks for each time it opens. One for you (owner), one shared by staff.</p>
+    <p class="msg banner" id="pn-msg" hidden></p>
+
+    <section class="panel pinstate" id="pn-state" data-state="off">
+      <div class="row"><span id="pn-state-text">Checking…</span></div>
+    </section>
+
+    <div id="pn-form">
+      <section class="panel">
+        <h2>Owner PIN (only you)</h2>
+        <div class="fieldpair">
+          <div class="field">
+            <label for="pn-owner">Owner PIN</label>
+            <input id="pn-owner" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pn-owner2">Again</label>
+            <input id="pn-owner2" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Staff PIN (shared)</h2>
+        <div class="fieldpair">
+          <div class="field">
+            <label for="pn-staff">Staff PIN</label>
+            <input id="pn-staff" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pn-staff2">Again</label>
+            <input id="pn-staff2" class="pinbox" type="text" inputmode="numeric" maxlength="4" autocomplete="off">
+          </div>
+        </div>
+      </section>
+      <p class="note">Avoid easy ones like 1111 or 1234. Staff limits come in the next build; for now both PINs open everything.</p>
+      <button type="button" id="pn-save" class="bigsave">Next</button>
+    </div>
+
+    <section class="panel" id="pn-code-panel" hidden>
+      <h2>Your reset code</h2>
+      <div class="codebox" id="pn-code"></div>
+      <p class="note" style="margin: 6px 18px 12px">If you forget the owner PIN, this code lets you choose a new one. It is shown only now. Write it on paper and keep it away from the counter.</p>
+      <div class="check">
+        <input id="pn-wrote" type="checkbox">
+        <label for="pn-wrote">I have written this code on paper</label>
+      </div>
+      <div class="btnpad">
+        <button type="button" id="pn-turn-on" class="bigsave" disabled>Save PINs</button>
+        <button type="button" id="pn-code-back" class="secondary">Back, change the PINs</button>
+      </div>
+    </section>
+
+  </section>
+
   <footer id="status">Checking the app…</footer>
 </main>
 
@@ -2130,7 +2287,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Backup look build 10a-6';
+  var BUILD = 'PIN build 10b-1';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -2163,6 +2320,7 @@
     $('screen-gaps').hidden = (which !== 'gaps');
     $('screen-backup').hidden = (which !== 'backup');
     $('screen-load').hidden = (which !== 'load');
+    $('screen-pins').hidden = (which !== 'pins');
     currentScreen = which;
     /* The Menu button only appears where leaving loses nothing. Screens
        with a form or a payment in progress keep their own Back/Cancel,
@@ -4665,6 +4823,488 @@
     $('go-backup').click();
   });
 
+  /* ---------- owner and staff PINs (10b-1) ----------
+     A PIN is a 4-number code asked for each time the till opens. The PINs
+     are never kept as typed: only a scrambled form (a one-way "hash" that
+     can check a PIN but cannot be turned back into it) is kept, in the
+     settings row 'pins'. That row goes into backups like the shop details.
+     This is a lock for the counter, not real security: there is no server. */
+
+  var PIN_KEY = 'pins';
+  var PIN_ROUNDS = 100000;            /* how hard each scramble works */
+  var PIN_WAIT_KEY = 'till:pinwait';  /* wrong tries, kept on the device */
+  var PIN_MAX_TRIES = 5;
+  var PIN_WAIT_SECONDS = 30;
+  var CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';  /* no 0/O, 1/I/L */
+
+  /* Who opened the till: '' when no PINs are set, else 'owner' or 'staff'.
+     Kept in memory only. 10b-2 will use it to limit staff. */
+  var pinRole = '';
+
+  function canScramble() {
+    return !!(window.crypto && window.crypto.subtle && window.crypto.getRandomValues &&
+      window.TextEncoder);
+  }
+
+  function toHex(buf) {
+    return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+      return ('0' + b.toString(16)).slice(-2);
+    }).join('');
+  }
+
+  function fromHex(hex) {
+    var out = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < out.length; i += 1) { out[i] = parseInt(hex.substr(i * 2, 2), 16); }
+    return out;
+  }
+
+  function scramble(secret, saltHex, rounds) {
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), 'PBKDF2', false, ['deriveBits'])
+      .then(function (key) {
+        return crypto.subtle.deriveBits(
+          { name: 'PBKDF2', hash: 'SHA-256', salt: fromHex(saltHex), iterations: rounds }, key, 256);
+      })
+      .then(toHex);
+  }
+
+  /* A new scrambled lock for one secret: { salt, hash, rounds }. */
+  function lockFor(secret) {
+    var b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    var salt = toHex(b);
+    return scramble(secret, salt, PIN_ROUNDS).then(function (hash) {
+      return { salt: salt, hash: hash, rounds: PIN_ROUNDS };
+    });
+  }
+
+  function fits(secret, lock) {
+    if (!lock || typeof lock.salt !== 'string' || typeof lock.hash !== 'string' ||
+        !(lock.rounds > 0)) {
+      return Promise.resolve(false);
+    }
+    return scramble(secret, lock.salt, lock.rounds).then(function (h) { return h === lock.hash; });
+  }
+
+  function newResetCode() {
+    var b = new Uint32Array(8);
+    crypto.getRandomValues(b);
+    var code = '';
+    for (var i = 0; i < 8; i += 1) { code += CODE_LETTERS.charAt(b[i] % CODE_LETTERS.length); }
+    return code;
+  }
+  function codeText(code) { return code.slice(0, 4) + '-' + code.slice(4); }
+  function cleanCode(typed) { return String(typed || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  /* Why a PIN can't be used, or null. */
+  function pinProblem(pin, again, who) {
+    if (!/^\d{4}$/.test(pin)) { return 'The ' + who + ' PIN must be exactly 4 numbers.'; }
+    if (pin !== again) { return 'The two ' + who + ' PINs are not the same. Type them again.'; }
+    if (/^(\d)\1\1\1$/.test(pin) || '0123456789'.indexOf(pin) !== -1 ||
+        '9876543210'.indexOf(pin) !== -1) {
+      return 'The ' + who + ' PIN is too easy to guess. Choose another.';
+    }
+    return null;
+  }
+
+  /* The saved PINs row, or null when PINs are not set. */
+  function getPins() {
+    return Till.get('settings', PIN_KEY).then(function (row) {
+      return row && row.owner && row.staff && row.reset ? row : null;
+    });
+  }
+
+  /* Saves the row, reads it back and proves every secret opens its lock. */
+  function savePins(row, ownerPin, staffPin, code) {
+    return Till.put('settings', row).then(function () {
+      return getPins();
+    }).then(function (saved) {
+      if (!saved || JSON.stringify(saved) !== JSON.stringify(row)) {
+        throw new Error('The PINs did not save. Try again.');
+      }
+      return Promise.all([
+        fits(ownerPin, saved.owner),
+        staffPin === null ? true : fits(staffPin, saved.staff),
+        fits(code, saved.reset),
+        fits(ownerPin, saved.staff)
+      ]).then(function (r) {
+        if (!r[0] || !r[1] || !r[2] || r[3]) {
+          throw new Error('The PINs saved wrongly. Do not close the app; set them again.');
+        }
+        return saved;
+      });
+    });
+  }
+
+  function whenSet(row) {
+    var d = new Date();
+    row.setAt = d.toISOString();
+    row.setDate = Till.localDate(d);
+    return row;
+  }
+
+  function errText(err) { return String(err && err.message ? err.message : err); }
+
+  /* ----- the PINs screen (Menu → PINs) ----- */
+
+  var pendingPins = null;   /* waiting for the tick; nothing is saved before it */
+
+  function clearPinBoxes() {
+    ['pn-owner', 'pn-owner2', 'pn-staff', 'pn-staff2'].forEach(function (id) { $(id).value = ''; });
+  }
+
+  function showPinForm() {
+    $('pn-form').hidden = false;
+    $('pn-code-panel').hidden = true;
+  }
+
+  function showPinState() {
+    return getPins().then(function (row) {
+      $('pn-state').setAttribute('data-state', row ? 'on' : 'off');
+      $('pn-state-text').textContent = row
+        ? 'PINs are on. The till asks for one each time it opens. Last changed ' +
+          Receipt.dateText(row.setDate) + '.'
+        : 'No PINs yet. The till opens without asking.';
+    }).catch(function (err) {
+      say('pn-msg', 'bad', 'Could not read the PINs: ' + errText(err));
+    });
+  }
+
+  $('go-pins').addEventListener('click', function () {
+    say('pn-msg', '', '');
+    pendingPins = null;
+    clearPinBoxes();
+    showPinForm();
+    show('pins');
+    $('pn-save').disabled = !canScramble();
+    if (!canScramble()) {
+      say('pn-msg', 'bad', 'This browser cannot keep PINs. Open the till from its normal internet address.');
+      return;
+    }
+    showPinState();
+  });
+
+  $('pn-save').addEventListener('click', function () {
+    say('pn-msg', '', '');
+    var owner = $('pn-owner').value.trim();
+    var staff = $('pn-staff').value.trim();
+    var problem = pinProblem(owner, $('pn-owner2').value.trim(), 'owner') ||
+      pinProblem(staff, $('pn-staff2').value.trim(), 'staff');
+    if (!problem && owner === staff) { problem = 'The owner and staff PINs must be different.'; }
+    if (problem) { say('pn-msg', 'bad', problem); return; }
+    pendingPins = { owner: owner, staff: staff, code: newResetCode() };
+    $('pn-code').textContent = codeText(pendingPins.code);
+    $('pn-wrote').checked = false;
+    $('pn-turn-on').disabled = true;
+    $('pn-form').hidden = true;
+    $('pn-code-panel').hidden = false;
+    window.scrollTo(0, 0);
+  });
+
+  $('pn-wrote').addEventListener('change', function () {
+    $('pn-turn-on').disabled = !$('pn-wrote').checked;
+  });
+
+  $('pn-code-back').addEventListener('click', function () {
+    pendingPins = null;
+    showPinForm();
+  });
+
+  $('pn-turn-on').addEventListener('click', function () {
+    if (!pendingPins || !$('pn-wrote').checked) { return; }
+    var p = pendingPins;
+    $('pn-turn-on').disabled = true;
+    say('pn-msg', '', '');
+    Promise.all([lockFor(p.owner), lockFor(p.staff), lockFor(p.code)]).then(function (l) {
+      var row = whenSet({ key: PIN_KEY, version: 1, owner: l[0], staff: l[1], reset: l[2] });
+      return savePins(row, p.owner, p.staff, p.code);
+    }).then(function () {
+      pendingPins = null;
+      pinRole = 'owner';
+      clearPinBoxes();
+      showPinForm();
+      say('pn-msg', 'good', 'PINs saved. From now on the till asks for a PIN each time it opens.');
+      window.scrollTo(0, 0);
+      return showPinState();
+    }).catch(function (err) {
+      say('pn-msg', 'bad', errText(err));
+      $('pn-turn-on').disabled = !$('pn-wrote').checked;
+    });
+  });
+
+  $('pn-back').addEventListener('click', function () {
+    pendingPins = null;
+    clearPinBoxes();
+    show('home');
+    refresh();
+  });
+
+  /* ----- the lock that covers the till ----- */
+
+  var lockPins = null;     /* the saved row while the lock is up */
+  var lockEntry = '';      /* digits typed so far */
+  var lockBusy = false;
+  var lockWait = { fails: 0, until: 0 };
+  var waitTimer = null;
+  var pendingReset = null;
+
+  function readWait() {
+    try {
+      var w = JSON.parse(localStorage.getItem(PIN_WAIT_KEY) || 'null');
+      if (w && typeof w.fails === 'number' && typeof w.until === 'number') { return w; }
+    } catch (e) { /* nothing kept */ }
+    return { fails: 0, until: 0 };
+  }
+  function writeWait() {
+    try { localStorage.setItem(PIN_WAIT_KEY, JSON.stringify(lockWait)); } catch (e) { /* ignore */ }
+  }
+  function noteFail() {
+    lockWait.fails += 1;
+    if (lockWait.fails >= PIN_MAX_TRIES) {
+      lockWait.fails = 0;
+      lockWait.until = Date.now() + PIN_WAIT_SECONDS * 1000;
+    }
+    writeWait();
+  }
+  function noteSuccess() {
+    lockWait = { fails: 0, until: 0 };
+    writeWait();
+  }
+  function secondsToWait() {
+    var s = Math.ceil((lockWait.until - Date.now()) / 1000);
+    return s > PIN_WAIT_SECONDS ? PIN_WAIT_SECONDS : (s > 0 ? s : 0);
+  }
+
+  /* Shows the countdown while waiting. Returns true while there is a wait. */
+  function tickWait() {
+    clearTimeout(waitTimer);
+    var s = secondsToWait();
+    if (!s) {
+      if ($('lk-msg').getAttribute('data-wait')) {
+        $('lk-msg').textContent = '';
+        $('lk-msg').removeAttribute('data-wait');
+      }
+      return false;
+    }
+    $('lk-msg').textContent = 'Too many wrong tries. Wait ' + s + ' seconds.';
+    $('lk-msg').setAttribute('data-wait', '1');
+    waitTimer = setTimeout(tickWait, 1000);
+    return true;
+  }
+
+  function lockMode(mode) {
+    $('lock').setAttribute('data-mode', mode);
+    $('lk-padview').hidden = mode !== 'pad';
+    $('lk-resetview').hidden = mode !== 'reset';
+  }
+
+  function showDots() {
+    Array.prototype.forEach.call($('lk-dots').children, function (dot, i) {
+      dot.className = i < lockEntry.length ? 'on' : '';
+    });
+  }
+
+  function lockSay(text) {
+    $('lk-msg').removeAttribute('data-wait');
+    $('lk-msg').textContent = text;
+  }
+
+  function showLock(row) {
+    lockPins = row;
+    lockEntry = '';
+    lockBusy = false;
+    lockWait = readWait();
+    lockMode('pad');
+    showDots();
+    lockSay('');
+    tickWait();
+    $('lk-shop').textContent = $('tb-name').textContent;
+    $('lock').hidden = false;
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+  }
+
+  function unlock(role) {
+    pinRole = role;
+    lockPins = null;
+    lockEntry = '';
+    pendingReset = null;
+    clearTimeout(waitTimer);
+    ['lk-code', 'lk-new', 'lk-new2'].forEach(function (id) { $(id).value = ''; });
+    $('lock').hidden = true;
+  }
+
+  /* On opening: cover the till if PINs are set. If the saved data cannot
+     be read, the till opens as before rather than being stuck shut. */
+  function startLock() {
+    if (!canScramble()) { $('lock').hidden = true; return Promise.resolve(); }
+    var slow = setTimeout(function () { $('lock').hidden = true; }, 5000);
+    return getPins().then(function (row) {
+      clearTimeout(slow);
+      if (row) { showLock(row); } else { pinRole = ''; $('lock').hidden = true; }
+    }).catch(function () {
+      clearTimeout(slow);
+      $('lock').hidden = true;
+    });
+  }
+
+  function tryPin(pin) {
+    lockBusy = true;
+    fits(pin, lockPins.owner).then(function (isOwner) {
+      if (isOwner) { return 'owner'; }
+      return fits(pin, lockPins.staff).then(function (isStaff) { return isStaff ? 'staff' : ''; });
+    }).then(function (role) {
+      lockBusy = false;
+      lockEntry = '';
+      showDots();
+      if (role) { noteSuccess(); unlock(role); return; }
+      noteFail();
+      var dots = $('lk-dots');
+      dots.classList.remove('shake');
+      void dots.offsetWidth;
+      dots.classList.add('shake');
+      if (!tickWait()) { lockSay('Wrong PIN. Try again.'); }
+    }).catch(function (err) {
+      lockBusy = false;
+      lockEntry = '';
+      showDots();
+      lockSay('Could not check the PIN: ' + errText(err));
+    });
+  }
+
+  function padPress(d) {
+    if (lockBusy || !lockPins || secondsToWait() > 0) { return; }
+    if (d === 'back') { lockEntry = lockEntry.slice(0, -1); showDots(); return; }
+    if (lockEntry.length >= 4) { return; }
+    if (!lockEntry) { lockSay(''); }
+    lockEntry += d;
+    showDots();
+    if (lockEntry.length === 4) { tryPin(lockEntry); }
+  }
+
+  $('lk-pad').addEventListener('click', function (event) {
+    var b = event.target.closest ? event.target.closest('button[data-d]') : null;
+    if (b) { padPress(b.getAttribute('data-d')); }
+  });
+
+  /* While the lock is up, no key reaches the till underneath (a scan must
+     not land in the Sell search). On the pad, number keys type the PIN. */
+  window.addEventListener('keydown', function (event) {
+    if ($('lock').hidden) { return; }
+    event.stopPropagation();
+    if ($('lock').getAttribute('data-mode') !== 'pad') { return; }
+    if (/^[0-9]$/.test(event.key)) {
+      event.preventDefault();
+      padPress(event.key);
+    } else if (event.key === 'Backspace') {
+      event.preventDefault();
+      padPress('back');
+    } else if (event.key === 'Enter' || event.key === ' ' || event.keyCode === 13 || event.keyCode === 32) {
+      event.preventDefault();
+    }
+  }, true);
+
+  /* Nothing under the lock may take the focus (it would open the iPad keyboard). */
+  document.addEventListener('focusin', function (event) {
+    if (!$('lock').hidden && !$('lock').contains(event.target) && event.target.blur) {
+      event.target.blur();
+    }
+  });
+
+  /* ----- forgot owner PIN ----- */
+
+  function resetSay(state, text) { say('lk-rmsg', state, text); }
+
+  $('lk-forgot').addEventListener('click', function () {
+    pendingReset = null;
+    ['lk-code', 'lk-new', 'lk-new2'].forEach(function (id) { $(id).value = ''; });
+    resetSay('', '');
+    $('lk-rform').hidden = false;
+    $('lk-rsave').hidden = false;
+    $('lk-rcode').hidden = true;
+    lockMode('reset');
+  });
+
+  $('lk-rback').addEventListener('click', function () {
+    pendingReset = null;
+    ['lk-code', 'lk-new', 'lk-new2'].forEach(function (id) { $(id).value = ''; });
+    lockEntry = '';
+    showDots();
+    lockSay('');
+    tickWait();
+    lockMode('pad');
+  });
+
+  $('lk-rsave').addEventListener('click', function () {
+    if (lockBusy || !lockPins) { return; }
+    resetSay('', '');
+    var wait = secondsToWait();
+    if (wait) { resetSay('bad', 'Too many wrong tries. Wait ' + wait + ' seconds.'); return; }
+    var code = cleanCode($('lk-code').value);
+    var pin = $('lk-new').value.trim();
+    if (code.length !== 8) {
+      resetSay('bad', 'The reset code has 8 letters and numbers, like ABCD-2345.');
+      return;
+    }
+    var problem = pinProblem(pin, $('lk-new2').value.trim(), 'new owner');
+    if (problem) { resetSay('bad', problem); return; }
+    lockBusy = true;
+    $('lk-rsave').disabled = true;
+    fits(code, lockPins.reset).then(function (ok) {
+      if (!ok) {
+        noteFail();
+        var w = secondsToWait();
+        throw new Error(w ? 'Too many wrong tries. Wait ' + w + ' seconds.'
+          : 'That reset code is not right. Check the paper and try again.');
+      }
+      return fits(pin, lockPins.staff);
+    }).then(function (sameAsStaff) {
+      if (sameAsStaff) { throw new Error('The new owner PIN must be different from the staff PIN.'); }
+      pendingReset = { pin: pin, code: newResetCode() };
+      $('lk-newcode').textContent = codeText(pendingReset.code);
+      $('lk-wrote').checked = false;
+      $('lk-rdone').disabled = true;
+      $('lk-rform').hidden = true;
+      $('lk-rsave').hidden = true;
+      $('lk-rcode').hidden = false;
+      resetSay('good', 'Reset code accepted.');
+    }).catch(function (err) {
+      resetSay('bad', errText(err));
+    }).then(function () {
+      lockBusy = false;
+      $('lk-rsave').disabled = false;
+    });
+  });
+
+  $('lk-wrote').addEventListener('change', function () {
+    $('lk-rdone').disabled = !$('lk-wrote').checked;
+  });
+
+  $('lk-rdone').addEventListener('click', function () {
+    if (lockBusy || !pendingReset || !lockPins || !$('lk-wrote').checked) { return; }
+    var r = pendingReset;
+    var before = lockPins;
+    lockBusy = true;
+    $('lk-rdone').disabled = true;
+    Promise.all([lockFor(r.pin), lockFor(r.code)]).then(function (l) {
+      var row = JSON.parse(JSON.stringify(before));
+      row.owner = l[0];
+      row.reset = l[1];
+      return savePins(whenSet(row), r.pin, null, r.code).then(function (saved) {
+        if (JSON.stringify(saved.staff) !== JSON.stringify(before.staff)) {
+          throw new Error('The staff PIN changed by mistake. Set the PINs again from the Menu.');
+        }
+      });
+    }).then(function () {
+      lockBusy = false;
+      noteSuccess();
+      unlock('owner');
+    }).catch(function (err) {
+      lockBusy = false;
+      $('lk-rdone').disabled = !$('lk-wrote').checked;
+      resetSay('bad', errText(err));
+    });
+  });
+
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./service-worker.js');
   }
@@ -4682,7 +5322,9 @@
   if (allCurrent()) {
     refresh();
     openSell();
+    startLock();
   } else {
+    $('lock').hidden = true;
     var stale = !dbIsCurrent() ? 'db.js' : (!cartIsCurrent() ? 'cart.js' :
       (!receiptIsCurrent() ? 'receipt.js' : (!reportIsCurrent() ? 'report.js' : 'backup.js')));
     $('verdict').setAttribute('data-state', 'bad');
