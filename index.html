@@ -1135,6 +1135,165 @@
     background: var(--bad);
   }
   button.danger:active { background: #7C2217; }
+
+  /* ---------- Sales history, Day, Turnover, Stock gaps (10a-5) ---------- */
+  main > #screen-history, main > #screen-gaps { max-width: 72rem; }
+  main > #screen-day, main > #screen-turnover { max-width: 46rem; }
+  .colhead .colnote { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+
+  /* two big shortcut buttons at the top of Sales history */
+  .shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  @media (max-width: 560px) { .shortcuts { grid-template-columns: 1fr; } }
+  button.shortcut {
+    display: flex; align-items: center; gap: 14px;
+    margin: 0; padding: 14px 18px; text-align: left;
+    color: var(--ink); border-radius: 20px;
+  }
+  button.shortcut.mint { background: var(--mint-soft); }
+  button.shortcut.peach { background: var(--peach-soft); }
+  button.shortcut:active { filter: brightness(0.96); }
+  button.shortcut .ico { width: 44px; height: 44px; padding: 9px; border-radius: 12px; background: #fff; }
+  button.shortcut.mint .ico { color: var(--mint); }
+  button.shortcut.peach .ico { color: #E07B3F; }
+  button.shortcut .nm { display: block; font-size: 19px; font-weight: 700; }
+  button.shortcut .sub { display: block; font-size: 14px; font-weight: 400; color: var(--muted); }
+  button.shortcut::after { content: '\203A'; margin-left: auto; color: var(--muted); font-size: 24px; font-weight: 400; }
+
+  /* lists of cards */
+  .cardlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(26rem, 1fr)); gap: 12px; margin-bottom: 22px; }
+  @media (max-width: 560px) { .cardlist { grid-template-columns: 1fr; } }
+  #screen-day .cardlist, #screen-turnover .cardlist, #screen-gaps .cardlist { grid-template-columns: 1fr; }
+  .cardlist > .empty { grid-column: 1 / -1; background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
+  .cardlist .rcard {
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
+  }
+  .cardlist .rcard .who { flex: 1; }
+  .cardlist .rcard .nm { overflow-wrap: anywhere; }
+  .cardlist .rcard .price { font-size: 19px; display: flex; align-items: center; gap: 6px; }
+  .cardlist .rcard .chev { font-size: 24px; }
+  .chip.qr { background: var(--pink-soft); color: var(--brand-dark); }
+  .chip.today { background: var(--brand); color: #fff; }
+
+  /* calendar square and time square */
+  .datetile, .timetile {
+    flex: none;
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: var(--peach-soft); color: #9A4A1C;
+    line-height: 1.05;
+  }
+  .datetile .wd { font-size: 13px; font-weight: 600; }
+  .datetile .dd { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .datetile.today { background: var(--pink-soft); color: var(--brand-dark); }
+  .timetile { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+
+  /* big coloured total card (Day, Turnover) */
+  .herocard { border-radius: 22px; padding: 16px 20px; margin-bottom: 22px; }
+  .herocard.pink { background: var(--pink-soft); }
+  .herocard.mint { background: var(--mint-soft); }
+  .herocard > .lbl { display: block; color: var(--muted); font-size: 15px; }
+  .herocard .big, .herocard .yearbox {
+    display: block; padding: 0;
+    font-size: 44px; font-weight: 700; line-height: 1.15;
+    color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .herocard.mint .yearbox { color: var(--mint-dark); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 10px; margin-top: 12px; }
+  .stat { background: #fff; border-radius: 14px; padding: 8px 12px; }
+  .stat .lbl { display: block; font-size: 14px; color: var(--muted); }
+  .stat .v { display: block; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* one month, with a bar showing its size next to the others */
+  .rcard.month { align-items: flex-start; }
+  .rcard.month .price { min-width: 9.5rem; justify-content: flex-end; }
+  .rcard.month.none { background: transparent; box-shadow: none; }
+  .rcard.month.none .nm, .rcard.month.none .price { color: var(--muted); font-weight: 600; }
+  .bar { display: block; height: 10px; border-radius: 999px; background: var(--line); margin: 8px 0 2px; overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: 999px; background: var(--mint); }
+
+  /* stock gaps */
+  .rcard.fixed { background: transparent; box-shadow: none; }
+  .reasonsum { margin: -2px 4px 10px; }
+  .reasonsum:empty { display: none; }
+  #gp-rm-list > .item:first-child { border-top: 0; }
+  .item .moved.minus { color: var(--bad); font-size: 19px; }
+
+  /* ---------- charts (10a-5) ---------- */
+  .chartcard {
+    background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+    padding: 14px 18px 12px; margin-bottom: 22px;
+    box-shadow: 0 2px 8px rgba(120, 60, 80, 0.06);
+  }
+  .chartcard[hidden] { display: none; }
+  .chartcard.slim { padding: 10px 16px; margin-bottom: 12px; }
+  .chartcard.slim:empty { display: none; }
+  .charthead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .charthead h2 { font-size: 17px; font-weight: 700; margin: 0; }
+  .charthead .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chart { padding-left: 42px; }
+  .carea { position: relative; height: 190px; margin-top: 24px; }
+  .gline { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
+  .gline span {
+    position: absolute; left: -42px; width: 36px; top: -9px;
+    text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .ccols { position: absolute; inset: 0; display: flex; gap: 6px; align-items: flex-end; }
+  .ccol { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+  .cval { font-size: 12px; font-weight: 700; color: var(--ink); white-space: nowrap; margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+  .cstack {
+    width: 100%; max-width: 46px;
+    display: flex; flex-direction: column;
+    border-radius: 8px 8px 3px 3px; overflow: hidden;
+  }
+  .seg { display: block; }
+  .seg.cash { background: var(--mint); }
+  .seg.qr { background: #EE8FAE; }
+  .ccol.mark .cstack { box-shadow: 0 0 0 3px var(--pink-soft); }
+  .clabs { display: flex; gap: 6px; border-top: 2px solid var(--line); padding-top: 6px; }
+  .clab { flex: 1; min-width: 0; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.15; }
+  .clab small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .clab.mark { color: var(--brand-dark); }
+  .clab.mark small { color: var(--brand-dark); }
+  .legend { display: flex; gap: 18px; justify-content: flex-end; margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .key::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 4px; margin-right: 6px; vertical-align: -1px; }
+  .key.cash::before { background: var(--mint); }
+  .key.qr::before { background: #EE8FAE; }
+  @media (max-width: 560px) { .cval { display: none; } }
+
+  /* cash / QR share bar */
+  .split { margin-top: 14px; }
+  .splitbar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: #fff; }
+  .splitlab { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600; margin-top: 4px; }
+  .splitlab span:first-child { color: var(--mint-dark); }
+  .splitlab span:last-child { color: var(--brand-dark); }
+
+  /* report table */
+  .tablebox { overflow-x: auto; }
+  table.report { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.report th {
+    font-size: 14px; font-weight: 600; color: var(--muted); text-align: right;
+    padding: 12px 16px 8px; border-bottom: 2px solid var(--line); white-space: nowrap;
+  }
+  table.report td { text-align: right; padding: 11px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.report th:first-child, table.report td:first-child { text-align: left; }
+  table.report td:last-child { font-weight: 700; }
+  table.report tbody tr:nth-child(even) { background: #FFFBF8; }
+  table.report tr.none td { color: var(--muted); font-weight: 400; }
+  table.report tbody tr:last-child td { border-bottom: 0; }
+
+  /* removals by reason */
+  .hbar { display: grid; grid-template-columns: 7rem 1fr 3rem; align-items: center; gap: 10px; padding: 5px 0; }
+  .hbar .hl { font-size: 15px; font-weight: 600; }
+  .hbar .ht { height: 12px; border-radius: 999px; background: var(--bg); overflow: hidden; }
+  .hbar .ht span { display: block; height: 100%; border-radius: 999px; background: #E07B3F; }
+  .hbar .hn { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -1362,90 +1521,116 @@
   <!-- ================== SALES HISTORY SCREEN ================ -->
   <section id="screen-history" hidden>
 
-    <h1>Sales history</h1>
+    <div class="pagehead">
+      <h1>Sales history</h1>
+    </div>
     <p class="lede" id="h-lede">Reading…</p>
     <p class="msg" id="h-msg" hidden></p>
 
-    <button id="h-turnover">Turnover by month</button>
-    <button id="h-gaps" class="secondary">Stock gaps and removals</button>
+    <div class="shortcuts">
+      <button type="button" id="h-turnover" class="shortcut mint"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="who"><span class="nm">Turnover by month</span><span class="sub">Last 12 months</span></span></button>
+      <button type="button" id="h-gaps" class="shortcut peach"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg><span class="who"><span class="nm">Stock gaps and removals</span><span class="sub">Sold without stock, removed items</span></span></button>
+    </div>
 
-    <section class="panel">
-      <h2>Each day, newest first</h2>
-      <div id="h-list"><div class="empty">Reading…</div></div>
-    </section>
+    <div class="chartcard" id="h-chartbox" hidden>
+      <div class="charthead"><h2>Last 14 days</h2><span class="v" id="h-chart-total"></span></div>
+      <div id="h-chart"></div>
+    </div>
+
+    <h2 class="colhead">Each day, newest first</h2>
+    <div id="h-list" class="cardlist"><div class="empty">Reading…</div></div>
 
     <button id="h-more" class="secondary" hidden>Show older days</button>
-    <button id="h-back" class="secondary">Back to menu</button>
+    <button id="h-back" class="secondary" hidden>Back to menu</button>
 
   </section>
 
   <!-- ===================== TURNOVER SCREEN ================== -->
   <section id="screen-turnover" hidden>
 
-    <h1>Turnover</h1>
-    <p class="lede" id="tv-lede">Reading…</p>
+    <div class="pagehead">
+      <h1>Turnover</h1>
+      <button type="button" id="tv-back" class="backpill chevback">Back to sales history</button>
+    </div>
     <p class="msg" id="tv-msg" hidden></p>
 
-    <section class="panel">
-      <h2>Last 12 months</h2>
+    <div class="herocard mint">
+      <span class="lbl">Last 12 months</span>
       <div class="yearbox" id="tv-year">–</div>
-      <div class="row"><span>Cash</span><span class="v" id="tv-cash">–</span></div>
-      <div class="row"><span>QR</span><span class="v" id="tv-qr">–</span></div>
-      <div class="row"><span>Sales</span><span class="v" id="tv-count">–</span></div>
-    </section>
-    <p class="note">The months below start on the 1st, so added together they can differ a little from the 12-month figure.</p>
+      <span class="lbl" id="tv-lede">Reading…</span>
+      <div class="stats">
+        <div class="stat"><span class="lbl">Cash</span><span class="v" id="tv-cash">–</span></div>
+        <div class="stat"><span class="lbl">QR</span><span class="v" id="tv-qr">–</span></div>
+        <div class="stat"><span class="lbl">Sales</span><span class="v" id="tv-count">–</span></div>
+      </div>
+      <div id="tv-split"></div>
+    </div>
 
-    <section class="panel">
-      <h2>Each month, newest first</h2>
-      <div id="tv-months"><div class="empty">Reading…</div></div>
-    </section>
+    <div class="chartcard">
+      <div class="charthead"><h2>Each month</h2></div>
+      <div id="tv-chart"></div>
+    </div>
 
-    <button id="tv-back" class="secondary">Back to sales history</button>
+    <h2 class="colhead">Each month, newest first</h2>
+    <div class="panel tablebox"><div id="tv-months"><div class="empty">Reading…</div></div></div>
+    <p class="note">Months start on the 1st, so added together they can differ a little from the 12-month figure.</p>
 
   </section>
 
   <!-- ============== STOCK GAPS AND REMOVALS SCREEN ========== -->
   <section id="screen-gaps" hidden>
 
-    <h1>Stock gaps and removals</h1>
+    <div class="pagehead">
+      <h1>Stock gaps and removals</h1>
+      <button type="button" id="gp-back" class="backpill chevback">Back to sales history</button>
+    </div>
     <p class="lede" id="gp-lede">Reading…</p>
 
-    <section class="panel">
-      <h2>Sold with no stock on record</h2>
-      <div id="gp-list"><div class="empty">Reading…</div></div>
-    </section>
-    <p class="note">These deliveries were probably never entered. Tap a product, count what is on the shelf, and add that number as a delivery. Sales before 16/09/2026 were not checked.</p>
-
-    <section class="panel">
-      <h2 id="gp-rm-heading">Removed from stock, newest first</h2>
-      <div id="gp-rm-list"><div class="empty">Reading…</div></div>
-    </section>
-
-    <button id="gp-back" class="secondary">Back to sales history</button>
+    <div class="stockgrid">
+      <div>
+        <h2 class="colhead">Sold with no stock on record</h2>
+        <div id="gp-list" class="cardlist"><div class="empty">Reading…</div></div>
+        <p class="note">These deliveries were probably never entered. Tap a product, count what is on the shelf, and add that number as a delivery. Sales before 16/09/2026 were not checked.</p>
+      </div>
+      <div>
+        <h2 class="colhead" id="gp-rm-heading">Removed from stock, newest first</h2>
+        <div class="chartcard slim" id="gp-rm-sum"></div>
+        <section class="panel">
+          <div id="gp-rm-list"><div class="empty">Reading…</div></div>
+        </section>
+      </div>
+    </div>
 
   </section>
 
   <!-- ===================== ONE DAY SCREEN =================== -->
   <section id="screen-day" hidden>
 
-    <h1 id="dy-title">Day</h1>
-    <p class="lede">Tap a sale to see its receipt.</p>
+    <div class="pagehead">
+      <h1 id="dy-title">Day</h1>
+      <button type="button" id="dy-back" class="backpill chevback">Back to sales history</button>
+    </div>
     <p class="msg" id="dy-msg" hidden></p>
 
-    <section class="panel">
-      <div class="row"><span>Total</span><span class="v" id="dy-total">–</span></div>
-      <div class="row"><span>Cash</span><span class="v" id="dy-cash">–</span></div>
-      <div class="row"><span>QR</span><span class="v" id="dy-qr">–</span></div>
-      <div class="row"><span>Sales</span><span class="v" id="dy-count">–</span></div>
-      <div class="row"><span>Items sold</span><span class="v" id="dy-items">–</span></div>
-    </section>
+    <div class="herocard pink">
+      <span class="lbl">Total</span>
+      <span class="big" id="dy-total">–</span>
+      <div class="stats">
+        <div class="stat"><span class="lbl">Cash</span><span class="v" id="dy-cash">–</span></div>
+        <div class="stat"><span class="lbl">QR</span><span class="v" id="dy-qr">–</span></div>
+        <div class="stat"><span class="lbl">Sales</span><span class="v" id="dy-count">–</span></div>
+        <div class="stat"><span class="lbl">Items</span><span class="v" id="dy-items">–</span></div>
+      </div>
+      <div id="dy-split"></div>
+    </div>
 
-    <section class="panel">
-      <h2>Sales, newest first</h2>
-      <div id="dy-list"><div class="empty">Reading…</div></div>
-    </section>
+    <div class="chartcard" id="dy-chartbox" hidden>
+      <div class="charthead"><h2>Sales by hour</h2></div>
+      <div id="dy-chart"></div>
+    </div>
 
-    <button id="dy-back" class="secondary">Back to sales history</button>
+    <h2 class="colhead">Sales, newest first <span class="colnote">Tap one for its receipt</span></h2>
+    <div id="dy-list" class="cardlist"><div class="empty">Reading…</div></div>
 
   </section>
 
@@ -1835,7 +2020,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Products look build 10a-4';
+  var BUILD = 'Reports look build 10a-5';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -3381,6 +3566,89 @@
     return Report.weekday(ymd) + ' ' + Receipt.dateText(ymd);
   }
 
+  /* 10a-5: the small calendar square on a day card: weekday over day number. */
+  function dateTile(ymd, isToday) {
+    var m = /^\d{4}-\d{2}-(\d{2})$/.exec(String(ymd || ''));
+    return '<span class="datetile' + (isToday ? ' today' : '') + '" aria-hidden="true">' +
+      '<span class="wd">' + esc(Report.weekday(ymd)) + '</span>' +
+      '<span class="dd">' + (m ? Number(m[1]) : '?') + '</span></span>';
+  }
+
+  /* Cash and QR amounts as coloured labels; an amount of zero is left out. */
+  /* ---------- charts (10a-5) ----------
+     Drawn as plain boxes on the page; no chart library, works offline.
+     Every bar also carries its exact figure (title), and the exact
+     figures are always written out beside the chart as well. */
+
+  /* 5,800,000 becomes "5.8M", 345,000 becomes "345k". For chart labels only. */
+  function shortKip(n) {
+    if (n >= 1000000) { return (Math.round(n / 100000) / 10).toString() + 'M'; }
+    if (n >= 1000) { return Math.round(n / 1000) + 'k'; }
+    return String(n);
+  }
+
+  /* A round number just above the biggest bar, for the guide lines. */
+  function niceTop(v) {
+    if (!(v > 0)) { return 1; }
+    var p = Math.pow(10, Math.floor(Math.log10(v)));
+    var f = v / p;
+    var steps = [1, 2, 3, 4, 5, 6, 8, 10];
+    var n = 10;
+    for (var i = steps.length - 1; i >= 0; i--) { if (f <= steps[i]) { n = steps[i]; } }
+    return n * p;
+  }
+
+  function pct(part, whole) { return whole ? (part * 100 / whole) : 0; }
+
+  /* cols: [{ label, sub, cashKip, qrKip, mark, title }] */
+  function columnChart(cols) {
+    var biggest = 0;
+    cols.forEach(function (c) { biggest = Math.max(biggest, c.cashKip + c.qrKip); });
+    if (!biggest) { return '<div class="empty">No sales in this time.</div>'; }
+    var top = niceTop(biggest);
+    var grid = [1, 0.5, 0].map(function (f) {
+      return '<span class="gline" style="bottom:' + (f * 100) + '%"><span>' + (f ? shortKip(top * f) : '0') + '</span></span>';
+    }).join('');
+    var bars = cols.map(function (c) {
+      var total = c.cashKip + c.qrKip;
+      return '<div class="ccol' + (c.mark ? ' mark' : '') + '" title="' + esc(c.title || '') + '">' +
+        (total ? '<span class="cval">' + shortKip(total) + '</span>' : '') +
+        '<div class="cstack" style="height:' + pct(total, top).toFixed(2) + '%">' +
+          '<span class="seg qr" style="height:' + pct(c.qrKip, total).toFixed(2) + '%"></span>' +
+          '<span class="seg cash" style="height:' + pct(c.cashKip, total).toFixed(2) + '%"></span>' +
+        '</div></div>';
+    }).join('');
+    var labs = cols.map(function (c) {
+      return '<span class="clab' + (c.mark ? ' mark' : '') + '">' + esc(c.label) +
+        (c.sub ? '<small>' + esc(c.sub) + '</small>' : '') + '</span>';
+    }).join('');
+    return '<div class="chart"><div class="carea">' + grid + '<div class="ccols">' + bars + '</div></div>' +
+      '<div class="clabs">' + labs + '</div></div>' +
+      '<div class="legend"><span class="key cash">Cash</span><span class="key qr">QR</span></div>';
+  }
+
+  /* One bar split into cash and QR, with the share of each. */
+  function splitBar(cashKip, qrKip) {
+    var total = cashKip + qrKip;
+    if (!total) { return ''; }
+    var c = Math.round(pct(cashKip, total));
+    return '<div class="split"><div class="splitbar">' +
+      '<span class="seg cash" style="width:' + pct(cashKip, total).toFixed(2) + '%"></span>' +
+      '<span class="seg qr" style="width:' + pct(qrKip, total).toFixed(2) + '%"></span></div>' +
+      '<div class="splitlab"><span>Cash ' + c + '%</span><span>QR ' + (100 - c) + '%</span></div></div>';
+  }
+
+  /* The date `n` days before ymd, as YYYY-MM-DD. */
+  function daysBefore(ymd, n) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    return Till.localDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - n, 12));
+  }
+
+  function moneyChips(cashKip, qrKip) {
+    return (cashKip ? '<span class="chip ok">Cash ' + Till.formatKip(cashKip) + '</span>' : '') +
+      (qrKip ? '<span class="chip qr">QR ' + Till.formatKip(qrKip) + '</span>' : '');
+  }
+
   function errText(err) {
     return String(err && err.message ? err.message : err);
   }
@@ -3394,6 +3662,7 @@
     say('h-msg', '', '');
     $('h-more').hidden = true;
     $('h-lede').textContent = 'Reading…';
+    $('h-chartbox').hidden = true;
     $('h-list').innerHTML = '<div class="empty">Reading…</div>';
 
     return Till.getAll('sales').then(function (sales) {
@@ -3409,17 +3678,38 @@
       $('h-lede').textContent = plural(days.length, 'day', 'days') +
         ' with sales. Tap a day to see its sales.';
 
+      var today = Till.localDate(new Date());
+      var byDate = {};
+      days.forEach(function (d) { byDate[d.date] = d; });
+      var cols = [];
+      var sum = 0;
+      for (var i = 13; i >= 0; i--) {
+        var ymd = daysBefore(today, i);
+        var d = byDate[ymd] || { cashKip: 0, qrKip: 0, totalKip: 0, count: 0 };
+        sum += d.totalKip;
+        cols.push({
+          label: String(Number(ymd.slice(8))), sub: Report.weekday(ymd).slice(0, 2),
+          cashKip: d.cashKip, qrKip: d.qrKip, mark: ymd === today,
+          title: dayLabel(ymd) + ': ' + Till.formatKip(d.totalKip) + ' (' + plural(d.count, 'sale', 'sales') + ')'
+        });
+      }
+      $('h-chart').innerHTML = columnChart(cols);
+      $('h-chart-total').textContent = Till.formatKip(sum);
+      $('h-chartbox').hidden = false;
+
       var html = '';
       days.slice(0, historyShown).forEach(function (d) {
-        var sub = plural(d.count, 'sale', 'sales') +
-          ' \u00B7 Cash ' + Till.formatKip(d.cashKip) +
-          ' \u00B7 QR ' + Till.formatKip(d.qrKip);
         html +=
-          '<button type="button" class="item" data-date="' + esc(d.date) + '">' +
+          '<button type="button" class="item rcard" data-date="' + esc(d.date) + '">' +
+            dateTile(d.date, d.date === today) +
             '<span class="who"><span class="nm">' + esc(dayLabel(d.date)) + '</span>' +
-            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="chips">' +
+              (d.date === today ? '<span class="chip today">Today</span>' : '') +
+              '<span class="chip plain">' + plural(d.count, 'sale', 'sales') + '</span>' +
+              moneyChips(d.cashKip, d.qrKip) +
+            '</span></span>' +
             '<span class="price">' + Till.formatKip(d.totalKip) +
-              ' <span class="chev">\u203A</span></span>' +
+              '<span class="chev">\u203A</span></span>' +
           '</button>';
       });
       $('h-list').innerHTML = html;
@@ -3462,6 +3752,8 @@
       $(id).textContent = '–';
     });
     $('dy-list').innerHTML = '<div class="empty">Reading…</div>';
+    $('dy-split').innerHTML = '';
+    $('dy-chartbox').hidden = true;
 
     return Till.getAll('sales').then(function (sales) {
       var t = Report.dayTotals(sales, date);
@@ -3476,6 +3768,31 @@
       $('dy-qr').textContent = Till.formatKip(t.qrKip);
       $('dy-count').textContent = t.count.toLocaleString('en-US');
       $('dy-items').textContent = t.itemCount.toLocaleString('en-US');
+      $('dy-split').innerHTML = splitBar(t.cashKip, t.qrKip);
+
+      if (list.length) {
+        /* Hours 7:00 to 21:00, stretched if a sale falls outside them. */
+        var hours = {};
+        var first = 7, last = 21;
+        list.forEach(function (s) {
+          var h = new Date(s.at).getHours();
+          var b = hours[h] || (hours[h] = { cashKip: 0, qrKip: 0, count: 0 });
+          if (s.method === 'cash') { b.cashKip += s.totalKip; } else { b.qrKip += s.totalKip; }
+          b.count += 1;
+          first = Math.min(first, h); last = Math.max(last, h);
+        });
+        var cols = [];
+        for (var h = first; h <= last; h++) {
+          var b = hours[h] || { cashKip: 0, qrKip: 0, count: 0 };
+          cols.push({
+            label: String(h), cashKip: b.cashKip, qrKip: b.qrKip,
+            title: String(h).padStart(2, '0') + ':00\u2013' + String(h).padStart(2, '0') + ':59: ' +
+              Till.formatKip(b.cashKip + b.qrKip) + ' (' + plural(b.count, 'sale', 'sales') + ')'
+          });
+        }
+        $('dy-chart').innerHTML = columnChart(cols);
+        $('dy-chartbox').hidden = false;
+      }
 
       if (!list.length) {
         $('dy-list').innerHTML = '<div class="empty">No sales on this day.</div>';
@@ -3483,14 +3800,16 @@
       }
       var html = '';
       list.forEach(function (s) {
-        var sub = timeOf(s.at) + ' \u00B7 ' + (s.method === 'cash' ? 'Cash' : 'QR') +
-          ' \u00B7 ' + plural(s.itemCount, 'item', 'items');
         html +=
-          '<button type="button" class="item" data-id="' + esc(s.id) + '">' +
+          '<button type="button" class="item rcard" data-id="' + esc(s.id) + '">' +
+            '<span class="timetile" aria-hidden="true">' + timeOf(s.at) + '</span>' +
             '<span class="who"><span class="nm">No. ' + s.number + '</span>' +
-            '<span class="sub">' + sub + '</span></span>' +
+            '<span class="chips">' +
+              (s.method === 'cash' ? '<span class="chip ok">Cash</span>' : '<span class="chip qr">QR</span>') +
+              '<span class="chip plain">' + plural(s.itemCount, 'item', 'items') + '</span>' +
+            '</span></span>' +
             '<span class="price">' + Till.formatKip(s.totalKip) +
-              ' <span class="chev">\u203A</span></span>' +
+              '<span class="chev">\u203A</span></span>' +
           '</button>';
       });
       $('dy-list').innerHTML = html;
@@ -3518,6 +3837,8 @@
     $('tv-year').textContent = '–';
     ['tv-cash', 'tv-qr', 'tv-count'].forEach(function (id) { $(id).textContent = '–'; });
     $('tv-months').innerHTML = '<div class="empty">Reading…</div>';
+    $('tv-chart').innerHTML = '';
+    $('tv-split').innerHTML = '';
 
     return Till.getAll('sales').then(function (sales) {
       var today = Till.localDate(new Date());
@@ -3526,10 +3847,11 @@
 
       $('tv-lede').textContent = 'From ' + Receipt.dateText(year.from) +
         ' to ' + Receipt.dateText(year.to) + ', today included.';
-      $('tv-year').innerHTML = 'Total sales:<span class="big">' + Till.formatKip(year.totalKip) + '</span>';
+      $('tv-year').textContent = Till.formatKip(year.totalKip);
       $('tv-cash').textContent = Till.formatKip(year.cashKip);
       $('tv-qr').textContent = Till.formatKip(year.qrKip);
       $('tv-count').textContent = year.count.toLocaleString('en-US');
+      $('tv-split').innerHTML = splitBar(year.cashKip, year.qrKip);
 
       var warn = [];
       if (year.skipped) { warn.push(skippedNote(year.skipped)); }
@@ -3539,20 +3861,24 @@
       }
       say('tv-msg', 'bad', warn.join(' '));
 
-      var html = '';
+      $('tv-chart').innerHTML = columnChart(months.slice().reverse().map(function (m) {
+        var name = Report.monthName(m.month);
+        return {
+          label: name.slice(0, 3), sub: name.slice(-2), cashKip: m.cashKip, qrKip: m.qrKip, mark: m.soFar,
+          title: name + (m.soFar ? ' (so far)' : '') + ': ' + Till.formatKip(m.totalKip)
+        };
+      }));
+
+      var html = '<table class="report"><thead><tr><th>Month</th><th>Sales</th><th>Cash</th><th>QR</th><th>Total</th></tr></thead><tbody>';
       months.forEach(function (m) {
-        var sub = m.count
-          ? plural(m.count, 'sale', 'sales') + ' \u00B7 Cash ' + Till.formatKip(m.cashKip) +
-            ' \u00B7 QR ' + Till.formatKip(m.qrKip)
-          : 'No sales';
-        html +=
-          '<div class="item">' +
-            '<span class="who"><span class="nm">' + esc(Report.monthName(m.month)) +
-              (m.soFar ? ' (so far)' : '') + '</span>' +
-            '<span class="sub">' + sub + '</span></span>' +
-            '<span class="price">' + Till.formatKip(m.totalKip) + '</span>' +
-          '</div>';
+        html += '<tr' + (m.count ? '' : ' class="none"') + '>' +
+          '<td>' + esc(Report.monthName(m.month)) + (m.soFar ? ' <span class="chip today">so far</span>' : '') + '</td>' +
+          '<td>' + m.count.toLocaleString('en-US') + '</td>' +
+          '<td>' + Till.formatKip(m.cashKip) + '</td>' +
+          '<td>' + Till.formatKip(m.qrKip) + '</td>' +
+          '<td>' + Till.formatKip(m.totalKip) + '</td></tr>';
       });
+      html += '</tbody></table>';
       $('tv-months').innerHTML = html;
     }).catch(function (err) {
       $('tv-lede').textContent = 'Turnover could not be worked out.';
@@ -3604,6 +3930,7 @@
     $('gp-list').innerHTML = '<div class="empty">Reading…</div>';
     $('gp-rm-list').innerHTML = '<div class="empty">Reading…</div>';
     $('gp-rm-heading').textContent = 'Removed from stock, newest first';
+    $('gp-rm-sum').innerHTML = '';
 
     return Promise.all([
       Till.getAll('sales'), Till.getAll('saleLines'), Till.getAll('batches'),
@@ -3621,15 +3948,18 @@
 
       var html = '';
       gaps.forEach(function (g) {
+        var name = names[g.productId] || g.name;
         var sub = plural(g.qty, 'item', 'items') + ' in ' + plural(g.saleCount, 'sale', 'sales') +
           ' \u00B7 last ' + Receipt.dateText(g.lastDate);
-        if (g.deliveredSince) { sub += ' \u00B7 <span class="instock">delivery added since</span>'; }
         html +=
-          '<button type="button" class="item" data-id="' + esc(g.productId) + '">' +
-            '<span class="who"><span class="nm">' + esc(names[g.productId] || g.name) + '</span>' +
-            '<span class="sub">' + sub + '</span></span>' +
-            '<span class="price">' + (g.deliveredSince ? '' : '<span class="nostock">Check</span> ') +
-              '<span class="chev">\u203A</span></span>' +
+          '<button type="button" class="item rcard' + (g.deliveredSince ? ' fixed' : '') + '" data-id="' + esc(g.productId) + '">' +
+            '<span class="initial" data-tone="' + toneOf(name) + '" aria-hidden="true">' + esc(initialOf(name)) + '</span>' +
+            '<span class="who"><span class="nm">' + esc(name) + '</span>' +
+            '<span class="sub">' + sub + '</span>' +
+            '<span class="chips">' + (g.deliveredSince
+              ? '<span class="chip ok">Delivery added since</span>'
+              : '<span class="chip warn">Check the shelf</span>') + '</span></span>' +
+            '<span class="price"><span class="chev">\u203A</span></span>' +
           '</button>';
       });
       $('gp-list').innerHTML = html ||
@@ -3639,7 +3969,16 @@
         var parts = Object.keys(Till.REMOVAL_REASONS)
           .filter(function (k) { return rm.byReason[k]; })
           .map(function (k) { return Till.REMOVAL_REASONS[k] + ' ' + rm.byReason[k].toLocaleString('en-US'); });
-        $('gp-rm-heading').textContent = plural(rm.totalQty, 'item', 'items') + ' removed: ' + parts.join(' \u00B7 ');
+        $('gp-rm-heading').textContent = plural(rm.totalQty, 'item', 'items') + ' removed, newest first';
+        var most = 0;
+        Object.keys(rm.byReason).forEach(function (k) { most = Math.max(most, rm.byReason[k]); });
+        $('gp-rm-sum').innerHTML = Object.keys(Till.REMOVAL_REASONS)
+          .filter(function (k) { return rm.byReason[k]; })
+          .map(function (k) {
+            return '<div class="hbar"><span class="hl">' + esc(Till.REMOVAL_REASONS[k]) + '</span>' +
+              '<span class="ht"><span style="width:' + pct(rm.byReason[k], most).toFixed(2) + '%"></span></span>' +
+              '<span class="hn">' + rm.byReason[k].toLocaleString('en-US') + '</span></div>';
+          }).join('');
       }
       var rows = '';
       rm.list.slice(0, REMOVALS_SHOWN).forEach(function (r) {
@@ -3650,7 +3989,7 @@
           '<div class="item">' +
             '<span class="who"><span class="nm">' + esc(names[r.productId] || '(product no longer saved)') + '</span>' +
             '<span class="sub">' + sub + '</span></span>' +
-            '<span class="moved">\u2212' + r.qty.toLocaleString('en-US') + '</span>' +
+            '<span class="moved minus">\u2212' + r.qty.toLocaleString('en-US') + '</span>' +
           '</div>';
       });
       if (rm.list.length > REMOVALS_SHOWN) {
