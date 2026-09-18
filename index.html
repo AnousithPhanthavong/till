@@ -105,6 +105,9 @@
     flex: none;
   }
   button.tb-menu:active { background: var(--soft); }
+  button.tb-lock { display: inline-flex; align-items: center; gap: 6px; }
+  button.tb-lock[hidden] { display: none; }
+  button.tb-lock .ico { width: 18px; height: 18px; margin: 0; }
   .tb-dot {
     position: absolute;
     top: 6px; right: 6px;
@@ -1419,6 +1422,7 @@
   <span class="tb-clock" id="tb-clock"></span>
   <span class="tb-net" id="tb-net">Online</span>
   <button type="button" class="tb-menu" id="tb-menu" hidden>&#9776; Menu<span class="tb-dot" id="tb-dot" hidden></span></button>
+  <button type="button" class="tb-menu tb-lock" id="tb-lock" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Lock</button>
 </header>
 
 <!-- ============ PIN LOCK (10b-1): covers everything until a PIN is typed ============ -->
@@ -2302,7 +2306,7 @@
   }
 
   /* The name of this version, shown at the bottom and written into backups. */
-  var BUILD = 'Staff build 10b-2a';
+  var BUILD = 'Lock build 10b-2b';
 
   function showStatus() {
     var home = window.navigator.standalone === true ||
@@ -4870,9 +4874,37 @@
     pinRole = role || '';
     if (pinRole) { document.body.setAttribute('data-role', pinRole); }
     else { document.body.removeAttribute('data-role'); }
-    if (pinRole === 'staff' && !staffMay(currentScreen)) { openSell(); }
-    else if (currentScreen === 'home') { refresh(); }
+    $('tb-lock').hidden = !pinRole;
+    lastTouch = Date.now();
+    if (pinRole === 'staff' && !staffMay(currentScreen)) { openSell(); return true; }
+    if (currentScreen === 'home') { refresh(); }
+    return false;
   }
+
+  /* ----- owner drops to staff after 5 minutes untouched (10b-2) ----- */
+
+  var OWNER_IDLE_MINUTES = 5;
+  var lastTouch = Date.now();
+
+  function touched() { lastTouch = Date.now(); }
+  ['pointerdown', 'touchstart', 'keydown', 'input'].forEach(function (name) {
+    document.addEventListener(name, touched, true);
+  });
+
+  /* Time away from the app counts as untouched: the clock is compared,
+     not counted, so a sleeping iPad cannot stretch the 5 minutes. */
+  function checkOwnerIdle() {
+    if (pinRole !== 'owner' || !$('lock').hidden) { return; }
+    if (Date.now() - lastTouch < OWNER_IDLE_MINUTES * 60000) { return; }
+    if (setRole('staff')) {
+      say('s-msg', 'good', 'Owner screens closed after ' + OWNER_IDLE_MINUTES +
+        ' minutes untouched. Tap Owner on the Menu to go back.');
+    }
+  }
+  setInterval(checkOwnerIdle, 15000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') { checkOwnerIdle(); }
+  });
 
   function canScramble() {
     return !!(window.crypto && window.crypto.subtle && window.crypto.getRandomValues &&
@@ -5260,6 +5292,15 @@
     getPins().then(function (row) {
       if (row) { showLock(row, true); } else { setRole(''); }
     }).catch(function () { /* stays in staff mode */ });
+  });
+
+  /* Lock: covers the till; either PIN opens it again. The screen and the
+     cart underneath are kept (a staff PIN still sends owner screens to Sell). */
+  $('tb-lock').addEventListener('click', function () {
+    $('tb-lock').blur();
+    getPins().then(function (row) {
+      if (row) { showLock(row); } else { setRole(''); }
+    }).catch(function () { /* the till stays as it is */ });
   });
 
   $('lk-cancel').addEventListener('click', function () {
